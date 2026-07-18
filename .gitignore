@@ -1,0 +1,33 @@
+# Заброшенный экспериментальный Electron-подпроект — не публикуется
+python/визуал/
+
+# Личные данные статистики прослушиваний / локальный конфиг
+python/suno_stats.json
+python/suno_stats_mobile.json
+python/suno_stats.html
+python/suno_rpc.cfg
+
+# Скриншоты и разовые архивы, не относящиеся к исходникам
+python/2.png
+python/suno_stats.png
+python/build_log.txt
+python/files (1).zip
+
+# Неиспользуемый дублирующий модуль (логика уже встроена в suno_rpc.py)
+python/mobile_sync_patch.py
+
+# Не относится к проекту
+list-general-user.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# PyInstaller
+python/build/
+python/dist/
+
+# OS
+Thumbs.db
+.DS_Store

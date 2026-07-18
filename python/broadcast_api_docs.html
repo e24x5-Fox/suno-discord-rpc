@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Suno RPC — Broadcast API</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg:      #0e0e10;
+    --bg2:     #18181b;
+    --bg3:     #27272a;
+    --bg4:     #1c1c1f;
+    --accent:  #8b5cf6;
+    --accent2: #a78bfa;
+    --accent3: #c4b5fd;
+    --text:    #f4f4f5;
+    --text2:   #a1a1aa;
+    --text3:   #52525b;
+    --green:   #22c55e;
+    --yellow:  #eab308;
+    --red:     #ef4444;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+
+  /* noise overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap { max-width: 860px; margin: 0 auto; padding: 60px 24px 100px; position: relative; z-index: 1; }
+
+  /* HERO */
+  .hero {
+    border-left: 3px solid var(--accent);
+    padding-left: 20px;
+    margin-bottom: 60px;
+  }
+  .hero-tag {
+    font-size: 11px;
+    color: var(--accent2);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .hero h1 {
+    font-family: 'Space Mono', monospace;
+    font-size: clamp(26px, 4vw, 38px);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+    margin-bottom: 12px;
+  }
+  .hero h1 span { color: var(--accent2); }
+  .hero p { color: var(--text2); font-size: 13px; max-width: 560px; }
+
+  /* SECTION */
+  section { margin-bottom: 52px; }
+
+  h2 {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent2);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after { content: ''; flex: 1; height: 1px; background: var(--bg3); }
+
+  h3 {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text2);
+    margin-bottom: 12px;
+    margin-top: 24px;
+    letter-spacing: 0.08em;
+  }
+
+  p { color: var(--text2); margin-bottom: 12px; font-size: 13px; }
+
+  /* CALLOUT BOXES */
+  .box {
+    background: var(--bg2);
+    border: 1px solid var(--bg3);
+    border-radius: 6px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .box.accent  { border-color: var(--accent);  }
+  .box.green   { border-color: #16a34a; background: #0f1f13; }
+  .box.yellow  { border-color: #a16207; background: #1a1600; }
+
+  /* STEP LIST */
+  .steps { list-style: none; counter-reset: steps; }
+  .steps li {
+    counter-increment: steps;
+    display: flex;
+    gap: 16px;
+    margin-bottom: 18px;
+    align-items: flex-start;
+  }
+  .steps li::before {
+    content: counter(steps);
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 2px;
+  }
+  .steps li .step-body { flex: 1; }
+  .steps li .step-title { color: var(--text); font-size: 13px; margin-bottom: 4px; font-weight: 500; }
+  .steps li .step-desc { color: var(--text2); font-size: 12px; }
+
+  /* CODE BLOCKS */
+  pre {
+    background: var(--bg2);
+    border: 1px solid var(--bg3);
+    border-radius: 6px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    position: relative;
+  }
+  pre code { font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.7; }
+
+  .lang-tag {
+    position: absolute;
+    top: 8px; right: 12px;
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* syntax colours */
+  .kw  { color: #c084fc; }  /* keywords */
+  .fn  { color: #60a5fa; }  /* functions */
+  .st  { color: #86efac; }  /* strings */
+  .cm  { color: #52525b; font-style: italic; }  /* comments */
+  .nm  { color: #fbbf24; }  /* numbers */
+  .op  { color: #e2e8f0; }  /* operators */
+
+  /* INLINE CODE */
+  code:not(pre code) {
+    background: var(--bg3);
+    color: var(--accent3);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  /* JSON FIELD TABLE */
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  thead th {
+    background: var(--bg3);
+    color: var(--text2);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 700;
+  }
+  thead th:first-child { border-radius: 4px 0 0 4px; }
+  thead th:last-child  { border-radius: 0 4px 4px 0; }
+  tbody tr { border-bottom: 1px solid var(--bg3); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody td { padding: 10px 12px; font-size: 12px; vertical-align: top; }
+  tbody td:first-child { color: var(--accent3); font-weight: 500; }
+  tbody td:nth-child(2) { color: var(--yellow); }
+  tbody td:nth-child(3) { color: var(--text2); }
+
+  /* ADDRESS CHIP */
+  .addr {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg3);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--accent2);
+    margin-bottom: 12px;
+    cursor: pointer;
+    user-select: all;
+    transition: background 0.15s;
+  }
+  .addr:hover { background: #1e1730; }
+  .addr .dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; animation: pulse 2s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.5; transform: scale(0.85); }
+  }
+
+  /* LANG TABS */
+  .tabs { display: flex; gap: 2px; margin-bottom: 0; }
+  .tab {
+    padding: 6px 14px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text3);
+    background: var(--bg2);
+    border: 1px solid var(--bg3);
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .tab.active { color: var(--accent2); background: var(--bg3); border-color: var(--bg3); }
+  .tab:hover:not(.active) { color: var(--text2); }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .tab-content pre { border-radius: 0 6px 6px 6px; margin-bottom: 0; }
+
+  /* IP EXPLAINER */
+  .ip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  @media(max-width: 580px) { .ip-grid { grid-template-columns: 1fr; } }
+  .ip-card {
+    background: var(--bg2);
+    border: 1px solid var(--bg3);
+    border-radius: 6px;
+    padding: 16px;
+  }
+  .ip-card .label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 6px; }
+  .ip-card .value { font-size: 13px; color: var(--accent2); margin-bottom: 6px; }
+  .ip-card .desc  { font-size: 11px; color: var(--text3); }
+
+  /* DIVIDER */
+  hr { border: none; border-top: 1px solid var(--bg3); margin: 40px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-tag">📡 Документация</div>
+    <h1>Suno RPC<br><span>Broadcast API</span></h1>
+    <p>Получай данные о текущем треке в реальном времени в любом приложении — на том же компьютере или по сети.</p>
+  </div>
+
+  <!-- SECTION: ЧТО ЭТО -->
+  <section>
+    <h2>Что такое Broadcast API</h2>
+    <p>Broadcast API — это WebSocket сервер встроенный в Suno RPC. Пока приложение запущено, любой клиент может подключиться к нему и получать обновления каждый раз когда меняется трек, пауза или позиция.</p>
+
+    <div class="box accent">
+      <div style="font-size:12px; color:var(--text2); margin-bottom:8px;">Адрес для подключения:</div>
+      <div class="addr"><span class="dot"></span>ws://localhost:6970</div>
+      <div style="font-size:11px; color:var(--text3); margin-top:8px;">Порт можно изменить в настройках оверлея → Broadcast API</div>
+    </div>
+
+    <p>Сразу после подключения сервер пришлёт последний известный трек. Затем — каждое новое обновление в реальном времени.</p>
+  </section>
+
+  <!-- SECTION: ЧТО ТАКОЕ IP -->
+  <section>
+    <h2>Что такое «ВАШ IP» и зачем он нужен</h2>
+    <p>Если подключаешься с <strong style="color:var(--text)">того же компьютера</strong> — всегда используй <code>localhost</code>:</p>
+    <div class="addr"><span class="dot"></span>ws://localhost:6970</div>
+
+    <p>Если подключаешься с <strong style="color:var(--text)">другого устройства</strong> в той же сети (телефон, ноутбук, второй ПК) — нужен локальный IP компьютера где запущен Suno RPC:</p>
+
+    <div class="ip-grid">
+      <div class="ip-card">
+        <div class="label">Windows</div>
+        <div class="value">ipconfig</div>
+        <div class="desc">Открой CMD или PowerShell, введи команду. Ищи «IPv4-адрес» — обычно начинается с 192.168.x.x</div>
+      </div>
+      <div class="ip-card">
+        <div class="label">Пример адреса</div>
+        <div class="value">ws://192.168.1.5:6970</div>
+        <div class="desc">Замени 192.168.1.5 на реальный IP своего компьютера</div>
+      </div>
+    </div>
+
+    <div class="box yellow">
+      <strong style="color:var(--yellow)">⚠ Важно:</strong>
+      <span style="color:var(--text2); font-size:12px;"> IP-адрес должен быть в той же локальной сети. Через интернет без настройки роутера (проброс портов) подключиться не получится.</span>
+    </div>
+  </section>
+
+  <!-- SECTION: ФОРМАТ СООБЩЕНИЯ -->
+  <section>
+    <h2>Формат сообщения</h2>
+    <p>Каждое сообщение — JSON строка. Тип всегда <code>track_update</code>.</p>
+
+    <pre><code><span class="op">{</span>
+  <span class="st">"event"</span><span class="op">:</span>    <span class="st">"track_update"</span><span class="op">,</span>
+  <span class="st">"title"</span><span class="op">:</span>    <span class="st">"Song Name"</span><span class="op">,</span>
+  <span class="st">"artist"</span><span class="op">:</span>   <span class="st">"Artist Name"</span><span class="op">,</span>
+  <span class="st">"url"</span><span class="op">:</span>      <span class="st">"https://suno.com/song/..."</span><span class="op">,</span>
+  <span class="st">"coverUrl"</span><span class="op">:</span> <span class="st">"https://cdn.suno.com/image_..."</span><span class="op">,</span>
+  <span class="st">"duration"</span><span class="op">:</span> <span class="nm">213</span><span class="op">,</span>         <span class="cm">// длина трека в секундах</span>
+  <span class="st">"elapsed"</span><span class="op">:</span>  <span class="nm">42</span><span class="op">,</span>          <span class="cm">// позиция воспроизведения в секундах</span>
+  <span class="st">"isPaused"</span><span class="op">:</span> <span class="kw">false</span><span class="op">,</span>
+  <span class="st">"timestamp"</span><span class="op">:</span> <span class="nm">1749308123</span>  <span class="cm">// Unix время отправки (сек)</span>
+<span class="op">}</span></code></pre>
+
+    <table>
+      <thead><tr><th>Поле</th><th>Тип</th><th>Описание</th></tr></thead>
+      <tbody>
+        <tr><td>event</td><td>string</td><td>Всегда <code>"track_update"</code></td></tr>
+        <tr><td>title</td><td>string</td><td>Название трека</td></tr>
+        <tr><td>artist</td><td>string</td><td>Автор или <code>"Suno AI"</code> если неизвестен</td></tr>
+        <tr><td>url</td><td>string</td><td>Ссылка на трек на Suno</td></tr>
+        <tr><td>coverUrl</td><td>string</td><td>URL обложки (может быть пустым)</td></tr>
+        <tr><td>duration</td><td>number</td><td>Длина трека в секундах</td></tr>
+        <tr><td>elapsed</td><td>number</td><td>Текущая позиция в секундах</td></tr>
+        <tr><td>isPaused</td><td>boolean</td><td><code>true</code> — пауза, <code>false</code> — играет</td></tr>
+        <tr><td>timestamp</td><td>number</td><td>Unix-время отправки события</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION: АУДИО ДАННЫЕ -->
+  <section>
+    <h2>Аудио-данные (FFT визуализация)</h2>
+    <p>Помимо <code>track_update</code>, сервер рассылает второй тип событий — <code>audio_data</code>. Это сырые данные FFT-анализа звука из браузера, обновляются каждые <strong style="color:var(--text)">50 мс</strong> (~20 раз в секунду).</p>
+
+    <div class="box accent">
+      <div style="font-size:12px; color:var(--text2); margin-bottom:8px;">Требования для получения аудио-данных:</div>
+      <div style="font-size:12px; color:var(--text2);">· Расширение Chrome должно захватить вкладку Suno (происходит автоматически при воспроизведении)<br>· Трек должен активно играть — на паузе данные не поступают</div>
+    </div>
+
+    <h3>Формат события audio_data</h3>
+    <pre><code><span class="op">{</span>
+  <span class="st">"event"</span><span class="op">:</span>  <span class="st">"audio_data"</span><span class="op">,</span>
+  <span class="st">"fft"</span><span class="op">:</span>    <span class="op">[</span><span class="nm">0</span><span class="op">,</span> <span class="nm">12</span><span class="op">,</span> <span class="nm">87</span><span class="op">,</span> <span class="nm">143</span><span class="op">,</span> <span class="nm">201</span><span class="op">,</span> <span class="nm">178</span><span class="op">, ...</span><span class="op">]</span><span class="op">,</span>  <span class="cm">// 64 числа, каждое 0–255</span>
+  <span class="st">"volume"</span><span class="op">:</span> <span class="nm">94</span>                               <span class="cm">// среднее по всем бинам, 0–255</span>
+<span class="op">}</span></code></pre>
+
+    <table>
+      <thead><tr><th>Поле</th><th>Тип</th><th>Описание</th></tr></thead>
+      <tbody>
+        <tr><td>event</td><td>string</td><td>Всегда <code>"audio_data"</code></td></tr>
+        <tr><td>fft</td><td>number[]</td><td>Массив из 64 чисел (0–255). Каждый элемент — амплитуда частотного бина. Индекс 0 — самые низкие частоты (бас), индекс 63 — высокие (высокочастотные детали)</td></tr>
+        <tr><td>volume</td><td>number</td><td>Среднее значение по всем 64 бинам. Удобно как общий уровень громкости (0–255)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Как фильтровать события</h3>
+    <p>Оба события приходят в один WebSocket на порту <code>6970</code>. Различать их нужно по полю <code>event</code>:</p>
+
+    <pre><code>ws.onmessage <span class="op">=</span> (e) <span class="op">=></span> <span class="op">{</span>
+  <span class="kw">const</span> msg <span class="op">=</span> <span class="fn">JSON</span>.<span class="fn">parse</span>(e.data);
+
+  <span class="kw">if</span> (msg.event <span class="op">===</span> <span class="st">"track_update"</span>) <span class="op">{</span>
+    <span class="cm">// метаданные трека</span>
+    <span class="fn">console</span>.<span class="fn">log</span>(msg.title, msg.artist);
+  <span class="op">}</span>
+
+  <span class="kw">if</span> (msg.event <span class="op">===</span> <span class="st">"audio_data"</span>) <span class="op">{</span>
+    <span class="cm">// FFT: 64 значения 0–255</span>
+    <span class="fn">drawEqualizer</span>(msg.fft);
+    <span class="cm">// общая громкость: 0–255</span>
+    <span class="fn">updateVolumeMeter</span>(msg.volume);
+  <span class="op">}</span>
+<span class="op">};</span><span class="lang-tag">javascript</span></code></pre>
+
+    <h3>Пример — Canvas эквалайзер для OBS Browser Source</h3>
+    <pre><code><span class="op">&lt;!</span>DOCTYPE html<span class="op">&gt;</span>
+<span class="op">&lt;</span>html<span class="op">&gt;&lt;</span>head<span class="op">&gt;</span>
+<span class="op">&lt;</span>style<span class="op">&gt;</span>
+  body <span class="op">{</span> margin:<span class="nm">0</span><span class="op">;</span> background: transparent<span class="op">; }</span>
+  canvas <span class="op">{</span> display:block<span class="op">; }</span>
+<span class="op">&lt;</span>/style<span class="op">&gt;&lt;</span>/head<span class="op">&gt;&lt;</span>body<span class="op">&gt;</span>
+<span class="op">&lt;</span>canvas id<span class="op">=</span><span class="st">"eq"</span> width<span class="op">=</span><span class="st">"512"</span> height<span class="op">=</span><span class="st">"120"</span><span class="op">&gt;&lt;</span>/canvas<span class="op">&gt;</span>
+<span class="op">&lt;</span>script<span class="op">&gt;</span>
+<span class="kw">const</span> canvas <span class="op">=</span> document.<span class="fn">getElementById</span>(<span class="st">'eq'</span>);
+<span class="kw">const</span> ctx    <span class="op">=</span> canvas.<span class="fn">getContext</span>(<span class="st">'2d'</span>);
+<span class="kw">let</span>   fft    <span class="op">=</span> <span class="kw">new</span> <span class="fn">Array</span>(<span class="nm">64</span>).<span class="fn">fill</span>(<span class="nm">0</span>);
+
+<span class="kw">function</span> <span class="fn">draw</span>() <span class="op">{</span>
+  ctx.<span class="fn">clearRect</span>(<span class="nm">0</span><span class="op">,</span> <span class="nm">0</span><span class="op">,</span> canvas.width<span class="op">,</span> canvas.height);
+  <span class="kw">const</span> barW <span class="op">=</span> canvas.width <span class="op">/</span> fft.length;
+  fft.<span class="fn">forEach</span>((val<span class="op">,</span> i) <span class="op">=></span> <span class="op">{</span>
+    <span class="kw">const</span> h <span class="op">=</span> (val <span class="op">/</span> <span class="nm">255</span>) <span class="op">*</span> canvas.height;
+    ctx.fillStyle <span class="op">=</span> <span class="st">`hsl(${260 + i * 1.5}, 80%, 65%)`</span>;
+    ctx.<span class="fn">fillRect</span>(i <span class="op">*</span> barW<span class="op">,</span> canvas.height <span class="op">-</span> h<span class="op">,</span> barW <span class="op">-</span> <span class="nm">1</span><span class="op">,</span> h);
+  <span class="op">}</span>);
+  <span class="fn">requestAnimationFrame</span>(draw);
+<span class="op">}</span>
+<span class="fn">draw</span>();
+
+<span class="kw">const</span> ws <span class="op">=</span> <span class="kw">new</span> <span class="fn">WebSocket</span>(<span class="st">'ws://localhost:6970'</span>);
+ws.onmessage <span class="op">=</span> e <span class="op">=></span> <span class="op">{</span>
+  <span class="kw">const</span> msg <span class="op">=</span> <span class="fn">JSON</span>.<span class="fn">parse</span>(e.data);
+  <span class="kw">if</span> (msg.event <span class="op">===</span> <span class="st">'audio_data'</span>) fft <span class="op">=</span> msg.fft;
+<span class="op">};</span>
+ws.onclose <span class="op">=</span> () <span class="op">=></span> <span class="fn">setTimeout</span>(() <span class="op">=></span> location.<span class="fn">reload</span>()<span class="op">,</span> <span class="nm">3000</span>);
+<span class="op">&lt;</span>/script<span class="op">&gt;&lt;</span>/body<span class="op">&gt;&lt;</span>/html<span class="op">&gt;</span><span class="lang-tag">html</span></code></pre>
+
+    <div class="box green">
+      <strong style="color:var(--green)">💡 Совет:</strong>
+      <span style="color:var(--text2); font-size:12px;"> Используй только первые 32 бина (<code>fft.slice(0, 32)</code>) — они содержат основную музыкальную информацию. Бины 32–63 это высокочастотный шум который визуально выглядит невыразительно.</span>
+    </div>
+  </section>
+
+  <!-- SECTION: ПРИМЕРЫ -->
+  <section>
+    <h2>Примеры кода</h2>
+
+    <!-- Python -->
+    <h3>Python — базовое подключение</h3>
+    <pre><code><span class="cm"># pip install websockets</span>
+<span class="kw">import</span> asyncio<span class="op">,</span> websockets<span class="op">,</span> json
+
+<span class="kw">async def</span> <span class="fn">main</span>():
+    <span class="kw">async with</span> websockets.<span class="fn">connect</span>(<span class="st">"ws://localhost:6970"</span>) <span class="kw">as</span> ws:
+        <span class="fn">print</span>(<span class="st">"Подключён. Ожидаем треки..."</span>)
+        <span class="kw">async for</span> msg <span class="kw">in</span> ws:
+            data <span class="op">=</span> json.<span class="fn">loads</span>(msg)
+            status <span class="op">=</span> <span class="st">"⏸"</span> <span class="kw">if</span> data[<span class="st">"isPaused"</span>] <span class="kw">else</span> <span class="st">"▶"</span>
+            <span class="fn">print</span>(<span class="fn">f</span><span class="st">"{status} {data['title']} — {data['artist']}"</span>)
+
+asyncio.<span class="fn">run</span>(<span class="fn">main</span>())<span class="lang-tag">python</span></code></pre>
+
+    <!-- Python + автореконнект -->
+    <h3>Python — с автоматическим переподключением</h3>
+    <pre><code><span class="kw">import</span> asyncio<span class="op">,</span> websockets<span class="op">,</span> json
+
+<span class="kw">async def</span> <span class="fn">on_track</span>(data: dict):
+    <span class="cm"># Сюда твоя логика</span>
+    <span class="fn">print</span>(<span class="fn">f</span><span class="st">"Трек: {data['title']} | elapsed: {data['elapsed']}s"</span>)
+
+<span class="kw">async def</span> <span class="fn">listen</span>():
+    url <span class="op">=</span> <span class="st">"ws://localhost:6970"</span>
+    <span class="kw">while True</span>:
+        <span class="kw">try</span>:
+            <span class="kw">async with</span> websockets.<span class="fn">connect</span>(url) <span class="kw">as</span> ws:
+                <span class="fn">print</span>(<span class="st">"✅ Подключён"</span>)
+                <span class="kw">async for</span> msg <span class="kw">in</span> ws:
+                    <span class="kw">await</span> <span class="fn">on_track</span>(json.<span class="fn">loads</span>(msg))
+        <span class="kw">except</span> Exception <span class="kw">as</span> e:
+            <span class="fn">print</span>(<span class="fn">f</span><span class="st">"⚠ Отключён: {e}. Reconnect через 3 сек..."</span>)
+            <span class="kw">await</span> asyncio.<span class="fn">sleep</span>(<span class="nm">3</span>)
+
+asyncio.<span class="fn">run</span>(<span class="fn">listen</span>())<span class="lang-tag">python</span></code></pre>
+
+    <!-- JS -->
+    <h3>JavaScript — браузер / OBS Browser Source</h3>
+    <pre><code><span class="kw">const</span> ws <span class="op">=</span> <span class="kw">new</span> <span class="fn">WebSocket</span>(<span class="st">'ws://localhost:6970'</span>);
+
+ws.onopen <span class="op">=</span> () <span class="op">=></span> <span class="fn">console</span>.<span class="fn">log</span>(<span class="st">'✅ Подключён к Suno RPC'</span>);
+
+ws.onmessage <span class="op">=</span> (e) <span class="op">=></span> {
+  <span class="kw">const</span> data <span class="op">=</span> <span class="fn">JSON</span>.<span class="fn">parse</span>(e.data);
+
+  document.<span class="fn">getElementById</span>(<span class="st">'title'</span>).textContent <span class="op">=</span> data.title;
+  document.<span class="fn">getElementById</span>(<span class="st">'artist'</span>).textContent <span class="op">=</span> data.artist;
+  document.<span class="fn">getElementById</span>(<span class="st">'cover'</span>).src <span class="op">=</span> data.coverUrl;
+};
+
+ws.onclose <span class="op">=</span> () <span class="op">=></span> <span class="fn">setTimeout</span>(() <span class="op">=></span> location.<span class="fn">reload</span>(), <span class="nm">3000</span>);<span class="lang-tag">javascript</span></code></pre>
+
+    <!-- Node.js -->
+    <h3>Node.js</h3>
+    <pre><code><span class="cm">// npm install ws</span>
+<span class="kw">const</span> WebSocket <span class="op">=</span> <span class="fn">require</span>(<span class="st">'ws'</span>);
+
+<span class="kw">const</span> ws <span class="op">=</span> <span class="kw">new</span> <span class="fn">WebSocket</span>(<span class="st">'ws://localhost:6970'</span>);
+
+ws.on(<span class="st">'message'</span>, (msg) <span class="op">=></span> {
+  <span class="kw">const</span> data <span class="op">=</span> <span class="fn">JSON</span>.<span class="fn">parse</span>(msg);
+  <span class="fn">console</span>.<span class="fn">log</span>(<span class="st">`${data.isPaused ? '⏸' : '▶'} ${data.title}`</span>);
+});
+
+ws.on(<span class="st">'close'</span>, () <span class="op">=></span> <span class="fn">console</span>.<span class="fn">log</span>(<span class="st">'Отключён'</span>));<span class="lang-tag">node.js</span></code></pre>
+  </section>
+
+  <!-- SECTION: OBS -->
+  <section>
+    <h2>Использование в OBS</h2>
+    <p>Можно сделать Now Playing оверлей прямо в OBS через Browser Source:</p>
+    <ol class="steps">
+      <li>
+        <div class="step-body">
+          <div class="step-title">Создай HTML файл с нужным дизайном</div>
+          <div class="step-desc">Пример кода ниже — вставь его в файл <code>nowplaying.html</code> и открой в браузере для проверки</div>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <div class="step-title">В OBS: Добавить → Browser Source</div>
+          <div class="step-desc">Тип источника — «Браузер». Не «URL», а локальный файл</div>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <div class="step-title">Укажи путь к файлу</div>
+          <div class="step-desc">Нажми «Обзор» и выбери свой <code>nowplaying.html</code></div>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <div class="step-title">Убедись что Suno RPC запущен</div>
+          <div class="step-desc">Browser Source подключится автоматически как только найдёт сервер на <code>localhost:6970</code></div>
+        </div>
+      </li>
+    </ol>
+
+    <h3>Минимальный пример Now Playing для OBS</h3>
+    <pre><code><span class="op">&lt;!</span>DOCTYPE html<span class="op">&gt;</span>
+<span class="op">&lt;</span>html<span class="op">&gt;&lt;</span>head<span class="op">&gt;</span>
+<span class="op">&lt;</span>style<span class="op">&gt;</span>
+  body <span class="op">{</span> margin:<span class="nm">0</span><span class="op">;</span> font-family: monospace<span class="op">;</span> background: transparent<span class="op">; }</span>
+  <span class="fn">#card</span> <span class="op">{</span>
+    display: flex<span class="op">;</span> align-items: center<span class="op">;</span> gap: <span class="nm">12px</span><span class="op">;</span>
+    background: <span class="st">rgba(0,0,0,.75)</span><span class="op">;</span> border-radius: <span class="nm">10px</span><span class="op">;</span>
+    padding: <span class="nm">10px 16px</span><span class="op">;</span> color: white<span class="op">;</span>
+  <span class="op">}</span>
+  img <span class="op">{</span> width:<span class="nm">48px</span><span class="op">;</span> height:<span class="nm">48px</span><span class="op">;</span> border-radius:<span class="nm">6px</span><span class="op">;</span> object-fit:cover<span class="op">; }</span>
+  <span class="fn">#title</span>  <span class="op">{</span> font-size:<span class="nm">15px</span><span class="op">;</span> font-weight:bold <span class="op">}</span>
+  <span class="fn">#artist</span> <span class="op">{</span> font-size:<span class="nm">12px</span><span class="op">;</span> opacity:.6 <span class="op">}</span>
+<span class="op">&lt;</span>/style<span class="op">&gt;&lt;</span>/head<span class="op">&gt;&lt;</span>body<span class="op">&gt;</span>
+<span class="op">&lt;</span>div id<span class="op">=</span><span class="st">"card"</span><span class="op">&gt;</span>
+  <span class="op">&lt;</span>img id<span class="op">=</span><span class="st">"cover"</span> src<span class="op">=</span><span class="st">""</span><span class="op">&gt;</span>
+  <span class="op">&lt;</span>div<span class="op">&gt;&lt;</span>div id<span class="op">=</span><span class="st">"title"</span><span class="op">&gt;</span>...<span class="op">&lt;</span>/div<span class="op">&gt;&lt;</span>div id<span class="op">=</span><span class="st">"artist"</span><span class="op">&gt;&lt;</span>/div<span class="op">&gt;&lt;</span>/div<span class="op">&gt;</span>
+<span class="op">&lt;</span>/div<span class="op">&gt;</span>
+<span class="op">&lt;</span>script<span class="op">&gt;</span>
+<span class="kw">const</span> ws <span class="op">=</span> <span class="kw">new</span> <span class="fn">WebSocket</span>(<span class="st">'ws://localhost:6970'</span>);
+ws.onmessage <span class="op">=</span> e <span class="op">=></span> <span class="op">{</span>
+  <span class="kw">const</span> d <span class="op">=</span> <span class="fn">JSON</span>.<span class="fn">parse</span>(e.data);
+  document.<span class="fn">getElementById</span>(<span class="st">'title'</span>).textContent  <span class="op">=</span> d.title;
+  document.<span class="fn">getElementById</span>(<span class="st">'artist'</span>).textContent <span class="op">=</span> d.artist;
+  document.<span class="fn">getElementById</span>(<span class="st">'cover'</span>).src     <span class="op">=</span> d.coverUrl;
+<span class="op">};</span>
+<span class="op">&lt;</span>/script<span class="op">&gt;&lt;</span>/body<span class="op">&gt;&lt;</span>/html<span class="op">&gt;</span><span class="lang-tag">html</span></code></pre>
+  </section>
+
+  <!-- SECTION: ЧАСТЫЕ ВОПРОСЫ -->
+  <section>
+    <h2>Частые вопросы</h2>
+
+    <h3>Почему данные не приходят?</h3>
+    <div class="box">
+      <p style="margin:0; font-size:12px;">Убедись что:<br>
+      · Suno RPC запущен и в настройках включён Broadcast API<br>
+      · Расширение браузера подключено (в оверлее зелёная точка «Расширение»)<br>
+      · На Suno.com открыт трек и он играет (данные приходят только при активном воспроизведении)<br>
+      · Порт 6970 не занят другим приложением</p>
+    </div>
+
+    <h3>Можно ли подключить несколько клиентов одновременно?</h3>
+    <p>Да. Broadcast API рассылает одни и те же данные всем подключённым клиентам. Количество отображается в оверлее Suno RPC.</p>
+
+    <h3>Как узнать свой IP?</h3>
+    <div class="box">
+      <p style="margin:0; font-size:12px;">
+        <strong style="color:var(--text)">Windows:</strong> Открой CMD → введи <code>ipconfig</code> → найди «IPv4-адрес» (обычно <code>192.168.x.x</code>)<br><br>
+        Или: Нажми <code>Win+I</code> → Сеть и Интернет → Свойства своей сети → прокрути вниз
+      </p>
+    </div>
+
+    <h3>Приложение на другом ПК не видит сервер</h3>
+    <div class="box yellow">
+      <p style="margin:0; font-size:12px; color:var(--text2);">
+        Возможные причины:<br>
+        · Брандмауэр Windows блокирует входящие соединения на порт 6970. Добавь правило: <code>netsh advfirewall firewall add rule name="SunoRPC" protocol=TCP dir=in localport=6970 action=allow</code><br>
+        · Устройства в разных сетях — оба должны быть в одной Wi-Fi/LAN сети
+      </p>
+    </div>
+  </section>
+
+  <hr>
+  <p style="font-size:11px; color:var(--text3); text-align:center;">Suno RPC Broadcast API · WebSocket · порт по умолчанию 6970</p>
+
+</div>
+</body>
+</html>
