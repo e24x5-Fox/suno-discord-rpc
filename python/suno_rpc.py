@@ -13,6 +13,7 @@ import tkinter as tk
 from tkinter import font as tkfont
 import io
 import os
+import socket
 import configparser
 import webbrowser
 
@@ -207,6 +208,18 @@ def make_icon(playing: bool, discord: bool) -> Image.Image:
 def fmt_time(sec: int) -> str:
     sec = max(0, int(sec))
     return f"{sec // 60}:{sec % 60:02d}"
+
+
+def get_local_ip() -> str:
+    """IP компьютера в локальной сети (для Broadcast API / мобильной синхронизации)."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
 
 
 class PopupWindow:
@@ -548,8 +561,9 @@ class PopupWindow:
         bp_row.pack(fill="x", pady=(2, 4))
 
         # Строка с адресом для копирования
+        self._local_ip = get_local_ip()
         self._bc_addr_label = tk.Label(body,
-            text=f"ws://ВАШ_IP:{self._broadcast_port_var.get()}",
+            text=f"ws://{self._local_ip}:{self._broadcast_port_var.get()}",
             fg=ACCENT2, bg=BG2, font=("Courier", 8),
             cursor="hand2", padx=6, pady=3, relief="flat")
         self._bc_addr_label.pack(fill="x", pady=(0, 10))
@@ -558,7 +572,7 @@ class PopupWindow:
             self.root.clipboard_append(self._bc_addr_label.cget("text")),
             self._bc_addr_label.configure(text="✔ Скопировано!"),
             self.root.after(1500, lambda: self._bc_addr_label.configure(
-                text=f"ws://ВАШ_IP:{self._broadcast_port_var.get()}"))
+                text=f"ws://{self._local_ip}:{self._broadcast_port_var.get()}"))
         ))
         tk.Label(body, text="Нажми на строку выше чтобы скопировать адрес",
                  fg=TEXT3, bg=BG, font=("Courier", 7)).pack(anchor="w", pady=(0, 4))
@@ -1414,15 +1428,7 @@ async def start_mobile_sync_server():
     site = aiohttp_web.TCPSite(runner, "0.0.0.0", MOBILE_SYNC_PORT)
     await site.start()
     print(f"📱 Мобильный синхронизатор запущен на порту {MOBILE_SYNC_PORT}")
-    try:
-        import socket as _socket
-        _s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
-        _s.connect(("8.8.8.8", 80))
-        _local_ip = _s.getsockname()[0]
-        _s.close()
-    except Exception:
-        _local_ip = "127.0.0.1"
-    print(f"   Адрес для телефона: http://{_local_ip}:{MOBILE_SYNC_PORT}")
+    print(f"   Адрес для телефона: http://{get_local_ip()}:{MOBILE_SYNC_PORT}")
     await asyncio.Future()
 
 
