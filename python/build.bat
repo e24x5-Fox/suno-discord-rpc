@@ -47,18 +47,9 @@ if exist "%~dp0dist\SunoRPC.exe" (
     echo   DONE: dist\SunoRPC.exe
     echo ============================================
     for %%F in ("%~dp0dist\SunoRPC.exe") do echo   Size: %%~zF bytes
+    echo   Ошибки смотри во вкладке "Логи" ^(значок ⚠^) в самом приложении.
 ) else (
     echo [ERROR] EXE not created - see build_log.txt
-)
-
-echo.
-echo Building DEBUG version (with console)...
-pyinstaller suno_rpc_debug.spec --noconfirm --clean >> "%LOG%" 2>&1
-if exist "%~dp0dist\SunoRPC_debug.exe" (
-    echo OK - dist\SunoRPC_debug.exe  (shows console on launch)
-    echo Run debug version first to see any errors!
-) else (
-    echo [ERROR] Debug EXE not created - see build_log.txt
 )
 :end
 echo.

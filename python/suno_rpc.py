@@ -24,12 +24,33 @@ print("Иконка появится в системном трее.")
 print("Для остановки — правая кнопка на иконке → Выйти")
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ── Лог ошибок для вкладки "Логи" в интерфейсе ────────────────────────────────
+# В релизной сборке нет консоли (console=False), поэтому единственный способ
+# для пользователя увидеть, что пошло не так, — панель "Логи" в popup-окне.
+MAX_ERROR_LOG = 200
+error_log: list = []   # [(timestamp, message), ...]
+popup_win       = None  # ссылка на PopupWindow — назначается в main()
+
+
+def log_error(msg: str):
+    """Печатает сообщение в консоль (если есть) и сохраняет для панели "Логи"."""
+    print(msg)
+    error_log.append((time.time(), msg))
+    if len(error_log) > MAX_ERROR_LOG:
+        del error_log[0]
+    if popup_win:
+        try:
+            popup_win.root.after(0, popup_win.on_new_error)
+        except Exception:
+            pass
+
+
 try:
     import suno_stats
     _STATS_AVAILABLE = True
 except ImportError:
     _STATS_AVAILABLE = False
-    print("⚠️  suno_stats.py не найден — статистика отключена")
+    log_error("⚠️  suno_stats.py не найден — статистика отключена")
 
 try:
     import websockets
@@ -41,8 +62,7 @@ try:
     _AIOHTTP_AVAILABLE = True
 except ImportError:
     _AIOHTTP_AVAILABLE = False
-    print("⚠️  aiohttp не найден — мобильная синхронизация отключена")
-    print("   Установите: pip install aiohttp")
+    log_error("⚠️  aiohttp не найден — мобильная синхронизация отключена. Установите: pip install aiohttp")
 
 MOBILE_SYNC_PORT = 6971
 
@@ -95,7 +115,6 @@ ws_clients      = 0
 async_loop      = None   # ссылка на asyncio loop фонового потока
 broadcast_clients: set = set()   # подписчики broadcast API
 
-popup_win   = None
 popup_open  = False
 
 # ── Конфиг ────────────────────────────────────
@@ -201,10 +220,13 @@ class PopupWindow:
         self.root.attributes("-alpha", 0.97)
 
         self._settings_open = False
+        self._logs_open = False
         self._w_main = 320
         self._h_main = 210
         self._w_settings = 320
         self._h_settings = 720
+        self._w_logs = 320
+        self._h_logs = 420
 
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
@@ -230,6 +252,10 @@ class PopupWindow:
         self.frame_settings = tk.Frame(r, bg=BG)
         self._build_settings(self.frame_settings)
 
+        # ══ СТРАНИЦА ЛОГОВ ══
+        self.frame_logs = tk.Frame(r, bg=BG)
+        self._build_logs(self.frame_logs)
+
     # ── Главная страница ──────────────────
     def _build_main(self, parent):
         # Шапка
@@ -245,6 +271,16 @@ class PopupWindow:
 
         btn_row = tk.Frame(header, bg=BG)
         btn_row.pack(side="right")
+
+        # Кнопка логов ⚠ — краснеет при новой ошибке
+        self.btn_logs = tk.Label(btn_row, text="⚠", fg=TEXT3, bg=BG,
+                                 font=("Courier", 12), cursor="hand2")
+        self.btn_logs.pack(side="left", padx=(0, 6))
+        self.btn_logs.bind("<Button-1>", lambda e: self._show_logs())
+        self.btn_logs.bind("<Enter>",    lambda e: self.btn_logs.configure(
+            fg=ACCENT2 if self.btn_logs.cget("fg") != RED else RED))
+        self.btn_logs.bind("<Leave>",    lambda e: self.btn_logs.configure(
+            fg=TEXT3 if self.btn_logs.cget("fg") != RED else RED))
 
         # Кнопка настроек ⚙
         btn_cfg = tk.Label(btn_row, text="⚙", fg=TEXT3, bg=BG,
@@ -725,6 +761,8 @@ class PopupWindow:
     def _show_settings(self):
         if self._settings_open:
             return
+        if self._logs_open:
+            self._hide_logs()
         self._settings_open = True
         self.frame_main.pack_forget()
         self.frame_settings.pack(fill="both", expand=True)
@@ -737,6 +775,94 @@ class PopupWindow:
         self.frame_settings.pack_forget()
         self.frame_main.pack(fill="both", expand=True)
         self.root.geometry(f"{self._w_main}x{self._h_main}")
+
+    # ── Показать/скрыть логи ──────────────
+    def _show_logs(self):
+        if self._logs_open:
+            return
+        if self._settings_open:
+            self._hide_settings()
+        self._logs_open = True
+        self.frame_main.pack_forget()
+        self.frame_logs.pack(fill="both", expand=True)
+        self.root.geometry(f"{self._w_logs}x{self._h_logs}")
+        self._render_logs()
+        self.btn_logs.configure(fg=TEXT3)  # отметить как прочитанное
+
+    def _hide_logs(self):
+        if not self._logs_open:
+            return
+        self._logs_open = False
+        self.frame_logs.pack_forget()
+        self.frame_main.pack(fill="both", expand=True)
+        self.root.geometry(f"{self._w_main}x{self._h_main}")
+
+    # ── Страница логов ─────────────────────
+    def _build_logs(self, parent):
+        header = tk.Frame(parent, bg=BG, pady=10, padx=14)
+        header.pack(fill="x", side="top")
+        tk.Label(header, text="ЛОГИ", fg=ACCENT, bg=BG,
+                 font=("Courier", 10, "bold")).pack(side="left")
+        btn_back = tk.Label(header, text="← Назад", fg=TEXT3, bg=BG,
+                            font=("Courier", 9), cursor="hand2")
+        btn_back.pack(side="right")
+        btn_back.bind("<Button-1>", lambda e: self._hide_logs())
+        btn_back.bind("<Enter>",    lambda e: btn_back.configure(fg=ACCENT2))
+        btn_back.bind("<Leave>",    lambda e: btn_back.configure(fg=TEXT3))
+
+        tk.Frame(parent, bg=BG3, height=1).pack(fill="x", side="top")
+
+        footer = tk.Frame(parent, bg=BG)
+        footer.pack(fill="x", side="bottom")
+        tk.Frame(footer, bg=BG3, height=1).pack(fill="x")
+        btn_copy = tk.Label(footer, text="⧉  Копировать всё", fg=ACCENT, bg=BG,
+                            font=("Courier", 9), pady=7, cursor="hand2")
+        btn_copy.pack()
+        btn_copy.bind("<Button-1>", lambda e: self._copy_logs())
+        btn_copy.bind("<Enter>",    lambda e: btn_copy.configure(fg=ACCENT2))
+        btn_copy.bind("<Leave>",    lambda e: btn_copy.configure(fg=ACCENT))
+
+        body = tk.Frame(parent, bg=BG)
+        body.pack(fill="both", expand=True, padx=10, pady=8)
+
+        self.txt_logs = tk.Text(body, bg=BG2, fg=TEXT2, insertbackground=ACCENT,
+                                relief="flat", font=("Courier", 8), wrap="word",
+                                state="disabled", padx=8, pady=6, bd=0,
+                                highlightthickness=0)
+        scrollbar = tk.Scrollbar(body, orient="vertical", command=self.txt_logs.yview,
+                                 bg=BG3, troughcolor=BG, activebackground=ACCENT)
+        self.txt_logs.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        self.txt_logs.pack(side="left", fill="both", expand=True)
+
+    def _render_logs(self):
+        self.txt_logs.configure(state="normal")
+        self.txt_logs.delete("1.0", "end")
+        if not error_log:
+            self.txt_logs.insert("end", "Пока нет ошибок — всё работает штатно.")
+        else:
+            for ts, msg in error_log:
+                t = time.strftime("%H:%M:%S", time.localtime(ts))
+                self.txt_logs.insert("end", f"[{t}] {msg}\n")
+        self.txt_logs.configure(state="disabled")
+        self.txt_logs.see("end")
+
+    def _copy_logs(self):
+        text = "\n".join(
+            f"[{time.strftime('%H:%M:%S', time.localtime(ts))}] {msg}"
+            for ts, msg in error_log
+        )
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text or "Логи пусты.")
+
+    def on_new_error(self):
+        """Вызывается из log_error() при появлении новой ошибки (из любого потока через .after)."""
+        try:
+            self.btn_logs.configure(fg=RED)
+        except Exception:
+            pass
+        if self._logs_open:
+            self._render_logs()
 
     # ── Переподключить Discord ────────────
     def _reconnect_discord(self):
@@ -927,7 +1053,7 @@ async def connect_discord():
         refresh_tray()
         return True
     except Exception as e:
-        print(f"⚠️  Discord недоступен: {e}")
+        log_error(f"⚠️  Discord недоступен: {e}")
         discord_ok = False
         state["discord"] = False
         refresh_tray()
@@ -1062,7 +1188,7 @@ async def update_presence(data: dict):
         print(f"{sym}  {title} — {artist}  [{me}:{se:02d} / {md}:{sd:02d}]")
 
     except Exception as e:
-        print(f"⚠️  Ошибка RPC: {e}")
+        log_error(f"⚠️  Ошибка RPC: {e}")
         try:
             rpc = AioPresence(DISCORD_CLIENT_ID)
             await rpc.connect()
@@ -1258,7 +1384,7 @@ async def handle_mobile_sync(request):
         try:
             suno_stats.generate_html()
         except Exception as e:
-            print(f"⚠️  Ошибка генерации HTML: {e}")
+            log_error(f"⚠️  Ошибка генерации HTML: {e}")
 
     return aiohttp_web.json_response({"ok": True, "processed": processed})
 
