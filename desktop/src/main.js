@@ -103,6 +103,7 @@ const windowIconPath = () => iconPath(`${uiSettings.iconVariant}.ico`);
 
 let mainWindow = null;
 let statsWindow = null;
+let guideWindow = null;
 let tray = null;
 let backend = null;          // ChildProcess Python-бэкенда
 let quitting = false;        // отличает «закрыть в трей» от настоящего выхода
@@ -623,6 +624,54 @@ function openBrowserPage(id) {
   return true;
 }
 
+// Инструкция по установке — обычная страница приложения (src/guide.html), а не
+// ссылка наружу: её открывают ровно в тот момент, когда что-то не получилось, и
+// интернета у пользователя может не быть. Поэтому в самой странице нет ни
+// внешних шрифтов, ни картинок по ссылке.
+function openGuideWindow() {
+  if (guideWindow && !guideWindow.isDestroyed()) {
+    guideWindow.show();
+    guideWindow.focus();
+    return;
+  }
+  guideWindow = new BrowserWindow({
+    title: 'Suno RPC — Как установить расширения',
+    width: 840,
+    height: 780,
+    minWidth: 480,
+    minHeight: 420,
+    backgroundColor: '#0e0e10',
+    icon: windowIconPath(),
+    autoHideMenuBar: true,
+    // Полоса заголовка своя, как у главного окна: страницу пишем мы, значит
+    // можем нарисовать её сами и не отдавать цвет системной теме.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: TITLEBAR_COLOR,
+      symbolColor: TITLEBAR_SYMBOL_COLOR,
+      height: TITLEBAR_HEIGHT,
+    },
+    webPreferences: { contextIsolation: true, nodeIntegration: false },
+  });
+  guideWindow.loadFile(path.join(__dirname, 'guide.html'));
+
+  // Ссылки на suno.com и GitHub уводят в системный браузер. Без этого они
+  // открылись бы прямо в окне инструкции, из которого некуда вернуться:
+  // навигации назад тут нет, окно пришлось бы закрывать и открывать заново.
+  guideWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  guideWindow.webContents.on('will-navigate', (e, url) => {
+    if (url !== guideWindow.webContents.getURL()) {
+      e.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
+  guideWindow.on('closed', () => { guideWindow = null; });
+}
+
 // ══════════════════════════════════════════════
 //  ВЫХОД
 // ══════════════════════════════════════════════
@@ -690,6 +739,7 @@ ipcMain.handle('open_extensions_folder', (_e, dir) => {
   return shell.openPath(target);
 });
 ipcMain.handle('open_browser_extensions', (_e, id) => openBrowserPage(id));
+ipcMain.handle('open_guide', () => openGuideWindow());
 
 ipcMain.handle('get_icon_settings', () => ({
   current: uiSettings.iconVariant,

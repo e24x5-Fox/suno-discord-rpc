@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('sunoApi', {
   get_extensions:          ()    => ipcRenderer.invoke('get_extensions'),
   open_extensions_folder:  (dir) => ipcRenderer.invoke('open_extensions_folder', dir),
   open_browser_extensions: (id)  => ipcRenderer.invoke('open_browser_extensions', id),
+  open_guide:              ()    => ipcRenderer.invoke('open_guide'),
 
   // Настройки окна и автозапуска — тоже на стороне Electron, и применяются
   // сразу при переключении, без общей кнопки «Сохранить».

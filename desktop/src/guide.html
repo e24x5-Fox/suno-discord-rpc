@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+<title>Suno RPC — Как установить расширения</title>
+<style>
+  /* Палитра та же, что у index.html: окно должно читаться как часть приложения.
+     Внешних ресурсов здесь нет намеренно — ни шрифтов с CDN, ни картинок по
+     ссылке: страница открывается из установленного приложения, у которого
+     интернета может не быть вовсе. Текст набран системным гротеском, а не
+     моноширинным шрифтом интерфейса: тут длинные абзацы, их читают, а не
+     сканируют глазами по колонкам. */
+  :root{
+    --bg:#0e0e10; --bg2:#18181b; --bg3:#27272a; --bg4:#1c1c1f;
+    --accent:#8b5cf6; --accent2:#a78bfa; --accent-soft:#2a2140;
+    --text:#f4f4f5; --text2:#a1a1aa; --text3:#52525b;
+    --green:#22c55e; --yellow:#eab308; --red:#ef4444;
+    --tb:#8b5cf6; --tb-h:36px;
+    --sans:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+    --mono:"Cascadia Code","Consolas",monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%; margin:0;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:var(--sans); font-size:14.5px; line-height:1.62;
+    display:flex; flex-direction:column;
+    border:1px solid var(--tb);
+    overflow:hidden;
+  }
+
+  /* ── Полоса заголовка, как у главного окна ── */
+  .titlebar{flex:0 0 auto; height:var(--tb-h); background:var(--tb); display:flex; overflow:hidden;}
+  .tb-drag{
+    width:env(titlebar-area-width, 100%); height:100%;
+    display:flex; align-items:center; gap:9px; padding-left:13px;
+    white-space:nowrap; overflow:hidden; -webkit-app-region:drag;
+  }
+  .tb-mark{width:9px; height:9px; border-radius:3px; background:rgba(255,255,255,.85); flex:0 0 auto;}
+  .tb-title{color:#fff; font-size:11.5px; font-weight:700; letter-spacing:.09em; font-family:var(--mono);}
+
+  .scroll{flex:1; overflow-y:auto; min-height:0;}
+  ::-webkit-scrollbar{width:9px;}
+  ::-webkit-scrollbar-track{background:var(--bg);}
+  ::-webkit-scrollbar-thumb{background:var(--bg3); border-radius:5px;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--accent);}
+
+  .page{max-width:640px; margin:0 auto; padding:34px 30px 80px;}
+
+  h1{
+    font-size:27px; font-weight:700; line-height:1.12; letter-spacing:-.02em;
+    margin:0 0 10px; text-wrap:balance;
+  }
+  .lede{color:var(--text2); font-size:15px; margin:0 0 4px;}
+  h2{
+    font-size:17.5px; font-weight:700; letter-spacing:-.01em;
+    margin:0 0 8px; color:var(--accent2); text-wrap:balance;
+  }
+  h3{font-size:14.5px; font-weight:700; margin:0 0 4px;}
+  p{margin:0 0 12px;}
+  a{color:var(--accent2); text-underline-offset:2px;}
+  a:focus-visible,button:focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:5px;}
+  hr{height:1px; background:var(--bg3); border:0; margin:34px 0;}
+  strong{color:var(--text); font-weight:600;}
+
+  /* ── Карточки расширений ── */
+  .ext-grid{display:grid; gap:9px; margin:16px 0 0;}
+  .ext{
+    display:grid; grid-template-columns:auto 1fr; gap:2px 12px;
+    background:var(--bg2); border:1px solid var(--bg3); border-radius:12px; padding:13px 15px;
+  }
+  .ext .glyph{
+    grid-row:span 2; width:32px; height:32px; border-radius:9px;
+    background:var(--accent-soft); display:grid; place-items:center; font-size:16px;
+  }
+  .ext .top{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .ext p{margin:0; font-size:13px; color:var(--text2);}
+  .pill{
+    font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+    padding:2px 7px; border-radius:999px; white-space:nowrap;
+  }
+  .pill.need{background:var(--accent-soft); color:#c4b5fd;}
+  .pill.opt{background:var(--bg3); color:var(--text3);}
+
+  /* ── Шаги ── */
+  .steps{counter-reset:step; margin-top:22px;}
+  .step{position:relative; margin-bottom:30px; padding-left:52px;}
+  .num{
+    counter-increment:step; position:absolute; left:0; top:-6px;
+    font-size:38px; font-weight:800; line-height:1; letter-spacing:-.04em;
+    color:transparent; -webkit-text-stroke:1.6px var(--accent);
+    font-variant-numeric:tabular-nums; font-family:var(--mono);
+  }
+  .num::before{content:counter(step);}
+  @media (max-width:560px){
+    .step{padding-left:0;}
+    .num{position:static; display:block; margin-bottom:2px; font-size:30px;}
+  }
+
+  ol,ul{margin:0 0 12px; padding-left:20px;}
+  li{margin-bottom:5px;}
+
+  code{font-family:var(--mono); font-size:12.5px; color:var(--accent2);}
+  .path{
+    display:block; background:var(--bg3); border-radius:7px; padding:9px 11px;
+    font-family:var(--mono); font-size:11.5px; color:var(--accent2);
+    word-break:break-all; margin:0 0 12px; user-select:text;
+  }
+  kbd{
+    background:var(--bg3); border:1px solid #3a3a40; border-bottom-width:2px;
+    border-radius:5px; padding:1px 6px; font-family:var(--mono); font-size:11.5px; color:var(--text);
+  }
+  .ui{background:var(--accent-soft); color:#ddd0ff; border-radius:5px; padding:1px 6px; font-weight:600;}
+
+  /* ── Вкладки браузеров ── */
+  .tabs{display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px;}
+  .tab{
+    font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer;
+    background:var(--bg2); color:var(--text2); border:1px solid var(--bg3);
+    border-radius:999px; padding:6px 14px;
+  }
+  .tab:hover{color:var(--text); border-color:var(--accent);}
+  .tab[aria-selected="true"]{background:var(--accent); border-color:var(--accent); color:#fff;}
+
+  /* ── Схема ── */
+  figure{margin:16px 0 18px;}
+  figure svg{display:block; width:100%; height:auto; border-radius:11px; border:1px solid var(--bg3);}
+  svg .f-bg2{fill:var(--bg2);} svg .f-bg3{fill:var(--bg3);} svg .f-bg4{fill:var(--bg4);}
+  svg .f-text{fill:var(--text);} svg .f-text2{fill:var(--text2);} svg .f-text3{fill:var(--text3);}
+  svg .f-accent{fill:var(--accent);} svg .f-accent2{fill:var(--accent2);}
+  svg .s-accent{stroke:var(--accent); fill:none;} svg .s-line{stroke:var(--bg3); fill:none;}
+  svg text{font-family:"Segoe UI",sans-serif;}
+  figcaption{font-size:12px; color:var(--text3); margin-top:7px;}
+
+  /* ── Врезки ── */
+  .note{
+    border:1px solid var(--bg3); border-left:3px solid var(--accent);
+    background:var(--bg2); border-radius:0 11px 11px 0;
+    padding:12px 14px; margin:0 0 14px; font-size:13.5px; color:var(--text2);
+  }
+  .note.warn{border-left-color:var(--yellow); background:rgba(234,179,8,.07); border-color:rgba(234,179,8,.22);}
+  .note.ok{border-left-color:var(--green); background:rgba(34,197,94,.07); border-color:rgba(34,197,94,.2);}
+  .note :last-child{margin-bottom:0;}
+
+  /* ── Проблемы ── */
+  dl{margin:14px 0 0; border-top:1px solid var(--bg3);}
+  dl > div{padding:13px 0; border-bottom:1px solid var(--bg3);}
+  dt{font-weight:600; color:var(--text); margin-bottom:2px;}
+  dd{margin:0; color:var(--text2); font-size:13.5px;}
+
+  footer{margin-top:34px; padding-top:16px; border-top:1px solid var(--bg3); color:var(--text3); font-size:12.5px;}
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <div class="tb-drag">
+    <span class="tb-mark"></span>
+    <span class="tb-title">КАК УСТАНОВИТЬ РАСШИРЕНИЯ</span>
+  </div>
+</div>
+
+<div class="scroll">
+<div class="page">
+
+  <h1>Как установить расширения</h1>
+  <p class="lede">Приложение само по себе не знает, что играет в браузере. Об этом ему рассказывает
+  расширение. Здесь — как его поставить, по шагам, ничего не пропуская.</p>
+
+  <div class="note ok" style="margin-top:18px;">
+    <strong>Скачивать ничего не нужно.</strong> Расширения уже лежат внутри приложения — они попали
+    туда вместе с установщиком. Надо только показать браузеру, где они.
+  </div>
+
+  <hr>
+
+  <h2>Что это за расширения</h2>
+  <p>Их три. Обязательное — только первое, остальные по желанию.</p>
+
+  <div class="ext-grid">
+    <div class="ext">
+      <div class="glyph">🎵</div>
+      <div class="top"><h3>Suno → Discord RPC</h3><span class="pill need">обязательное</span></div>
+      <p>Смотрит, какой трек играет на suno.com, и передаёт приложению. Без него в Discord
+      показывать нечего.</p>
+    </div>
+    <div class="ext">
+      <div class="glyph">▶</div>
+      <div class="top"><h3>YouTube → Discord RPC</h3><span class="pill opt">по желанию</span></div>
+      <p>Показывает в Discord видео с YouTube — но только когда музыка в Suno не играет.</p>
+    </div>
+    <div class="ext">
+      <div class="glyph">🎛</div>
+      <div class="top"><h3>Audio FX</h3><span class="pill opt">по желанию</span></div>
+      <p>С Discord никак не связано. Добавляет на suno.com панель со звуковыми эффектами:
+      эквалайзер, эхо, ревёрб, скорость.</p>
+    </div>
+  </div>
+
+  <hr>
+
+  <h2>Установка в Chrome, Edge, Opera GX или Яндексе</h2>
+  <p>Шесть шагов. Дольше читать, чем делать.</p>
+
+  <div class="steps">
+
+    <div class="step">
+      <span class="num"></span>
+      <h3>Запустите приложение</h3>
+      <p>Значок Suno RPC должен быть в трее, у часов. Если приложение не запущено, расширению
+      будет не с кем разговаривать.</p>
+    </div>
+
+    <div class="step">
+      <span class="num"></span>
+      <h3>Скопируйте путь к расширению</h3>
+      <p>Вернитесь на вкладку <span class="ui">🧩 Расширения</span> и нажмите
+      <span class="ui">📋 Скопировать путь</span> у нужного расширения. Путь выглядит так:</p>
+      <span class="path">C:\Users\Вы\AppData\Local\Programs\Suno RPC\resources\extensions\suno-rpc-extension</span>
+      <div class="note">
+        <p>Путь лежит в буфере обмена. Не копируйте пока ничего другого — иначе придётся вернуться
+        и нажать кнопку снова.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="num"></span>
+      <h3>Откройте страницу расширений браузера</h3>
+      <p>Проще всего — там же, на вкладке «Расширения»: внизу есть кнопки с браузерами, которые
+      нашлись у вас. Нажмите свой, страница откроется сама.</p>
+      <p>Если вручную — введите адрес в адресную строку браузера:</p>
+
+      <div class="tabs" role="tablist" aria-label="Выберите браузер">
+        <button class="tab" role="tab" aria-selected="true" data-browser="opera">Opera GX</button>
+        <button class="tab" role="tab" aria-selected="false" data-browser="edge">Edge</button>
+        <button class="tab" role="tab" aria-selected="false" data-browser="chrome">Chrome</button>
+        <button class="tab" role="tab" aria-selected="false" data-browser="yandex">Яндекс</button>
+      </div>
+
+      <div data-panel="opera"><span class="path">opera://extensions</span></div>
+      <div data-panel="edge" hidden><span class="path">edge://extensions</span></div>
+      <div data-panel="chrome" hidden><span class="path">chrome://extensions</span></div>
+      <div data-panel="yandex" hidden><span class="path">browser://extensions</span></div>
+    </div>
+
+    <div class="step">
+      <span class="num"></span>
+      <h3>Включите режим разработчика</h3>
+      <p>Найдите переключатель <span class="ui">Режим разработчика</span>. В Chrome и Edge он справа
+      вверху, в Opera GX — слева вверху. Включите его.</p>
+
+      <figure>
+        <svg viewBox="0 0 640 168" role="img" aria-label="Страница расширений: переключатель «Режим разработчика» справа вверху, ниже появляется кнопка «Загрузить распакованное расширение»">
+          <rect class="f-bg2" x="0" y="0" width="640" height="168"/>
+          <rect class="f-bg4" x="0" y="0" width="640" height="46"/>
+          <text class="f-text" x="22" y="30" font-size="15" font-weight="700">Расширения</text>
+
+          <rect class="f-accent" x="474" y="15" width="34" height="17" rx="8.5"/>
+          <circle class="f-bg2" cx="500" cy="23.5" r="6.5"/>
+          <text class="f-text2" x="518" y="28" font-size="12">Режим разработчика</text>
+
+          <rect class="s-accent" x="22" y="68" width="268" height="34" rx="8" stroke-width="2"/>
+          <text class="f-accent2" x="38" y="90" font-size="12.5" font-weight="600">Загрузить распакованное расширение</text>
+
+          <rect class="s-line" x="302" y="68" width="132" height="34" rx="8" stroke-width="1.5"/>
+          <text class="f-text3" x="318" y="90" font-size="12.5">Упаковать…</text>
+
+          <rect class="f-bg4" x="22" y="120" width="596" height="30" rx="8"/>
+          <circle class="f-bg3" cx="42" cy="135" r="7"/>
+          <rect class="f-bg3" x="58" y="130" width="120" height="9" rx="4.5"/>
+        </svg>
+        <figcaption>Кнопка «Загрузить распакованное расширение» появляется только после включения
+        режима разработчика. Не видно кнопки — значит переключатель ещё выключен.</figcaption>
+      </figure>
+    </div>
+
+    <div class="step">
+      <span class="num"></span>
+      <h3>Нажмите «Загрузить распакованное расширение»</h3>
+      <ol>
+        <li>Откроется окно выбора папки.</li>
+        <li>Щёлкните в строку адреса вверху этого окна и вставьте путь — <kbd>Ctrl</kbd> + <kbd>V</kbd>, затем <kbd>Enter</kbd>.</li>
+        <li>Нажмите <span class="ui">Выбор папки</span>.</li>
+      </ol>
+      <div class="note warn">
+        <p><strong>Выбирайте саму папку, а не файлы внутри неё.</strong> Заходить внутрь и тыкать в
+        <code>manifest.json</code> не надо — браузер должен получить папку целиком.</p>
+      </div>
+      <p>Расширение появится в списке. Готово.</p>
+    </div>
+
+    <div class="step">
+      <span class="num"></span>
+      <h3>Проверьте, что работает</h3>
+      <ol>
+        <li>Откройте <a href="https://suno.com">suno.com</a> и включите любой трек.</li>
+        <li>Щёлкните по значку расширения в панели браузера.</li>
+      </ol>
+      <div class="note ok">
+        <p>Должно быть написано <strong>🟢 Подключён</strong> и <strong>▶ Играет</strong>. Через
+        несколько секунд трек появится в вашем профиле Discord.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <hr>
+
+  <h2>Firefox — отдельная история</h2>
+  <p>В Firefox работают только два расширения из трёх: <strong>YouTube → Discord RPC</strong> и
+  <strong>Audio FX</strong>.</p>
+  <p>Основное, Suno → Discord RPC, в Firefox не работает совсем: ему нужны две возможности браузера,
+  которых у Firefox просто нет, и настройками это не чинится. Для Suno нужен Chrome, Edge, Opera
+  или Яндекс.</p>
+  <ol>
+    <li>Введите в адресную строку <code>about:debugging</code></li>
+    <li>Слева выберите <span class="ui">Этот Firefox</span></li>
+    <li>Нажмите <span class="ui">Загрузить временное дополнение</span></li>
+    <li>Зайдите в папку расширения и выберите внутри неё файл <code>manifest.json</code></li>
+  </ol>
+  <div class="note warn">
+    <p><strong>Такое дополнение исчезнет при перезапуске Firefox.</strong> Это ограничение самого
+    Firefox: он не принимает навсегда дополнения, не подписанные Mozilla. После каждого запуска
+    браузера придётся повторять.</p>
+  </div>
+
+  <hr>
+
+  <h2>Как этим пользоваться дальше</h2>
+  <p>Правило одно: <strong>сначала приложение, потом Suno</strong>. Если открыть suno.com раньше,
+  чем запущено приложение, — просто обновите страницу.</p>
+  <p>Всё остальное происходит само. Что играет, то и в Discord. Поставили музыку на паузу и
+  включили видео на YouTube — Discord переключится на видео. Музыка всегда главнее.</p>
+  <p>У Audio FX своя жизнь: на suno.com в правом нижнем углу появится кружок 🎛. Щелчок открывает
+  панель с эффектами, а сам кружок можно перетащить в любой угол.</p>
+
+  <hr>
+
+  <h2>Если что-то не работает</h2>
+  <dl>
+    <div>
+      <dt>Расширение пишет «не подключено»</dt>
+      <dd>Приложение не запущено или ещё не поднялось. Проверьте значок в трее и обновите
+      страницу suno.com.</dd>
+    </div>
+    <div>
+      <dt>Кнопки «Загрузить распакованное расширение» нет</dt>
+      <dd>Не включён режим разработчика. Вернитесь на шаг 4.</dd>
+    </div>
+    <div>
+      <dt>Браузер ругается на выбранную папку</dt>
+      <dd>Выбрана не та папка. Нужна та, внутри которой лежит <code>manifest.json</code>, — а не он
+      сам и не папка уровнем выше.</dd>
+    </div>
+    <div>
+      <dt>Браузер предлагает отключить расширения режима разработчика</dt>
+      <dd>Он так делает при каждом запуске. Просто закройте окошко крестиком — расширение
+      останется на месте.</dd>
+    </div>
+    <div>
+      <dt>В Discord ничего не появляется</dt>
+      <dd>Проверьте в Discord: <span class="ui">Настройки → Конфиденциальность → Отображать
+      активность</span>. И что на вкладке «Настройки» введён Client ID.</dd>
+    </div>
+    <div>
+      <dt>После обновления приложения расширение пропало</dt>
+      <dd>Такого быть не должно, но если папка переехала — повторите шаги 2–5.</dd>
+    </div>
+  </dl>
+
+  <hr>
+
+  <h2>Почему нельзя одной кнопкой</h2>
+  <p>Логичный вопрос: раз расширения уже внутри приложения, почему оно не поставит их само?</p>
+  <p>Потому что браузеры это запрещают. Раньше программы действительно могли молча добавить себе
+  расширение — и этим пользовались, чтобы подсовывать людям рекламу и слежку. В 2018 году Chrome
+  закрыл такую возможность для всех сразу, а следом и остальные браузеры на его основе. Firefox со
+  своей стороны не принимает дополнения без подписи Mozilla.</p>
+  <p>Обойти это можно только корпоративными правилами — теми, которыми на работе запрещают менять
+  настройки. Тогда расширение стало бы несъёмным: его нельзя было бы ни выключить, ни удалить. Для
+  домашней программы это перебор, поэтому последние два клика остаются за вами.</p>
+
+  <footer>
+    Suno RPC · инструкция открывается кнопкой на вкладке «🧩 Расширения»
+  </footer>
+
+</div>
+</div>
+
+<script>
+  const tabs = document.querySelectorAll(".tab[data-browser]");
+  const panels = document.querySelectorAll("[data-panel]");
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      tabs.forEach((t) => t.setAttribute("aria-selected", String(t === tab)));
+      panels.forEach((p) => { p.hidden = p.dataset.panel !== tab.dataset.browser; });
+    });
+  });
+</script>
+</body>
+</html>

@@ -222,6 +222,14 @@
     color:var(--text2); font-size:11px; line-height:1.5;
   }
   .ext-warn b{color:var(--yellow);}
+  .guide-cta{
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    background:var(--bg2); border:1px solid var(--accent); border-radius:12px;
+    padding:14px 16px; margin-bottom:14px;
+  }
+  .guide-txt{flex:1 1 260px; display:flex; flex-direction:column; gap:2px;}
+  .guide-txt b{color:var(--accent2); font-size:12.5px;}
+  .guide-txt span{color:var(--text2); font-size:11px; line-height:1.45;}
   .icon-grid{display:flex; gap:12px; flex-wrap:wrap; margin-top:4px;}
   .icon-opt{
     background:var(--bg3); border:2px solid transparent; border-radius:12px;
@@ -583,6 +591,15 @@
     <section class="tab" id="tab-extensions">
       <h1>РАСШИРЕНИЯ БРАУЗЕРА</h1>
       <p class="subtitle">Уже лежат на диске — скачивать ничего не нужно</p>
+
+      <div class="guide-cta">
+        <div class="guide-txt">
+          <b>Не знаешь, что делать дальше?</b>
+          <span>Пошаговая инструкция: куда нажимать в браузере, что означают ошибки
+            и почему Firefox — отдельная история.</span>
+        </div>
+        <button class="btn-primary" id="btn-guide">📖 Открыть инструкцию</button>
+      </div>
 
       <div class="ext-warn">
         <b>Почему не ставится само.</b> Chromium-браузеры с 2018 года блокируют
@@ -1085,6 +1102,7 @@ async function loadStats(){
     ytEl.textContent = "Доступные периоды: " + [...yt.years, ...yt.months].join(", ");
   }
 }
+document.getElementById("btn-guide").addEventListener("click", () => api.open_guide());
 document.getElementById("btn-open-stats").addEventListener("click", () => api.open_stats_window("suno"));
 document.getElementById("btn-open-yt-stats").addEventListener("click", () => api.open_stats_window("youtube"));
 
