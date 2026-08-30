@@ -4,6 +4,57 @@ let ws = null;
 let lastData = null;
 let reconnectTimer = null;
 
+// ── Авто-задержка звука для синхронизации с визуализацией ──────────────────
+// Меряем round-trip до Python (WS уже открыт на 6969) и берём половину как
+// оценку задержки конвейера offscreen → background → Python → Electron.
+// RENDER_BUFFER_MS — грубая поправка на сглаживание/рендер в самом оверлее,
+// которое этим пингом не измеряется (нет обратного канала от Electron) и
+// зависит от личных настроек Атака/Релиз пользователя в оверлее — поэтому
+// это ТОЛЬКО стартовая оценка, а не точный расчёт. delayOffsetMs — ручная
+// подстройка поверх неё из попапа расширения, персистится в chrome.storage.
+const PING_INTERVAL_MS          = 2000;
+const RENDER_BUFFER_MS          = 150;
+const MIN_DELAY_MS              = 0;
+const MAX_DELAY_MS              = 800;
+const DELAY_CHANGE_THRESHOLD_MS = 15;
+
+let emaLatencyMs    = null;
+let lastSentDelayMs = null;
+let delayOffsetMs   = 0;
+let pingTimer = null;
+
+chrome.storage.local.get(["audioDelayOffsetMs"], (res) => {
+  if (typeof res.audioDelayOffsetMs === "number") delayOffsetMs = res.audioDelayOffsetMs;
+});
+
+function sendPing() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "PING", ts: Date.now() }));
+  }
+}
+
+function currentTargetDelay() {
+  const base = emaLatencyMs === null ? 0 : emaLatencyMs + RENDER_BUFFER_MS;
+  return Math.max(MIN_DELAY_MS, Math.min(MAX_DELAY_MS, Math.round(base + delayOffsetMs)));
+}
+
+function applyDelay(force) {
+  const targetDelay = currentTargetDelay();
+  if (force || lastSentDelayMs === null || Math.abs(targetDelay - lastSentDelayMs) > DELAY_CHANGE_THRESHOLD_MS) {
+    lastSentDelayMs = targetDelay;
+    chrome.runtime.sendMessage({ type: "SET_DELAY", delayMs: targetDelay }).catch(() => {});
+  }
+}
+
+function handlePong(ts) {
+  const rtt = Date.now() - ts;
+  if (!(rtt >= 0) || rtt > 5000) return; // защита от битых/устаревших замеров
+
+  const oneWayEstimate = rtt / 2;
+  emaLatencyMs = emaLatencyMs === null ? oneWayEstimate : emaLatencyMs * 0.8 + oneWayEstimate * 0.2;
+  applyDelay(false);
+}
+
 // ── Offscreen / Audio capture ─────────────────────────────────────────────────
 let capturedTabId = null;
 const OFFSCREEN_URL = chrome.runtime.getURL("offscreen.html");
@@ -57,9 +108,23 @@ function connect() {
       console.log("[Suno RPC] Подключено к Python серверу");
       if (lastData) ws.send(JSON.stringify(lastData));
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+
+      if (pingTimer) clearInterval(pingTimer);
+      pingTimer = setInterval(sendPing, PING_INTERVAL_MS);
+      sendPing(); // первый замер сразу, не ждать целый интервал
     };
 
-    ws.onclose = () => scheduleReconnect();
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "PONG") handlePong(msg.ts);
+      } catch {}
+    };
+
+    ws.onclose = () => {
+      if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+      scheduleReconnect();
+    };
     ws.onerror = () => scheduleReconnect();
   } catch { scheduleReconnect(); }
 }
@@ -72,15 +137,30 @@ function scheduleReconnect() {
 // ── Messages ──────────────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "TRACK_UPDATE") {
+    const tabId = sender.tab?.id;
+    // Если уже захвачена конкретная вкладка (для аудио) — принимаем данные
+    // ТОЛЬКО от неё. Иначе content.js на каждой открытой вкладке suno.com
+    // (даже фоновой, на паузе) шлёт TRACK_UPDATE раз в 2с независимо, и они
+    // перебивают друг друга — то один трек мелькнёт в Discord, то другой,
+    // без всякой связи с тем, что реально играет. Освобождается автоматически
+    // при закрытии/обновлении вкладки (см. chrome.tabs.onRemoved ниже).
+    if (capturedTabId !== null && tabId !== capturedTabId) return;
     lastData = message.data;
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message.data));
-    if (sender.tab?.id) startAudioCapture(sender.tab.id);
+    if (tabId) startAudioCapture(tabId);
     return;
   }
 
   if (message.type === "AUDIO_DATA") {
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "AUDIO_DATA", fft: message.fft, volume: message.volume }));
+      ws.send(JSON.stringify({
+        type:     "AUDIO_DATA",
+        bass:     message.bass,
+        mid:      message.mid,
+        high:     message.high,
+        volume:   message.volume,
+        spectrum: message.spectrum,
+      }));
     }
     return;
   }
@@ -94,6 +174,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     stopAudioCapture();
     return;
   }
+
+  if (message.type === "SET_DELAY_OFFSET") {
+    delayOffsetMs = Number(message.offsetMs) || 0;
+    chrome.storage.local.set({ audioDelayOffsetMs: delayOffsetMs });
+    applyDelay(true); // сразу, без порога — пользователь двигает ползунок вручную
+    return;
+  }
+
+  if (message.type === "GET_DELAY_INFO") {
+    sendResponse({
+      emaLatencyMs,
+      renderBufferMs: RENDER_BUFFER_MS,
+      delayOffsetMs,
+      targetDelayMs: currentTargetDelay(),
+    });
+    return true;
+  }
 });
 
 // Если вкладка Suno закрылась/обновилась — останавливаем захват
@@ -102,6 +199,31 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (tabId === capturedTabId && info.status === "loading") stopAudioCapture();
+});
+
+// ── Живучесть service worker'а ───────────────────────────────────────────────
+// Chromium выгружает service worker расширения примерно через 30 секунд
+// простоя, унося с собой WebSocket. Обычно его будит content.js, который шлёт
+// данные каждые 2 секунды, — но у ФОНОВОЙ вкладки браузер душит таймеры, и
+// сообщения приходить перестают. В логах сервера это выглядело как «расширение
+// подключилось / отключилось» каждые полминуты: источник пропадал, сервер
+// подставлял шаблон ожидания, потом трек возвращался — и так по кругу, хотя
+// музыка всё это время играла.
+//
+// Будильник — единственный механизм, который будит worker независимо от того,
+// активна ли вкладка. На пробуждении проверяем сокет и при необходимости
+// переподключаемся: после выгрузки worker'а все переменные модуля обнулены.
+const KEEPALIVE_ALARM = "suno-rpc-keepalive";
+
+chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.5 });
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== KEEPALIVE_ALARM) return;
+  if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+    connect();
+  } else if (ws.readyState === WebSocket.OPEN) {
+    sendPing();   // заодно подтверждает, что соединение живое
+  }
 });
 
 connect();

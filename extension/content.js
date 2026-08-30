@@ -52,6 +52,11 @@ function getTrackData() {
     }
 
     return {
+      // Сервер различает источники активности по этому полю: параллельно к
+      // нему подключается youtube-расширение (youtube-extension/), которое
+      // шлёт source: "youtube". Без поля сервер считает данные суновскими —
+      // старые сборки расширения из-за этого продолжают работать.
+      source: "suno",
       title, artist, coverUrl, trackUrl,
       duration: Math.floor(audio.duration) || 0,
       elapsed: Math.floor(audio.currentTime) || 0,

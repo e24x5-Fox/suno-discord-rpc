@@ -1,10 +1,22 @@
-# Заброшенный экспериментальный Electron-подпроект — не публикуется
+# Экспериментальный Electron-оверлей Now Playing — дорабатывается, но в
+# репозиторий не публикуется (в папке images/ лежат гигабайты чужих картинок)
 python/визуал/
+
+# Заметки для AI по этому репозиторию. Локальные: больше половины файла про
+# оверлей выше, которого в репозитории нет, — читателю они бесполезны.
+# Публичный гайд для AI — AI_GUIDE.md, он отслеживается.
+CLAUDE.md
+
+# Личные скрипты запуска рабочего окружения (адрес локального прокси, пути к
+# профилям) — к проекту отношения не имеют
+claude_code_proxy*.bat
 
 # Личные данные статистики прослушиваний / локальный конфиг
 python/suno_stats.json
 python/suno_stats_mobile.json
 python/suno_stats.html
+python/youtube_stats.json
+python/youtube_stats.html
 python/suno_rpc.cfg
 
 # Скриншоты и разовые архивы, не относящиеся к исходникам
@@ -19,6 +31,21 @@ python/mobile_sync_patch.py
 # Не относится к проекту
 list-general-user.txt
 
+# Промежуточные копии, оставшиеся от отладки: старые срезы suno_rpc.py и
+# резервные слепки личной статистики прослушиваний
+1 extension/
+python/1/
+python/2/
+python/3/
+python/эталон/
+python/*.bak
+python/*.bak2
+python/run_test.log
+
+# Отдельная отладочная сборка бэкенда убрана — панель логов теперь в самом
+# приложении (см. коммит «Add in-app error log panel»)
+python/suno_rpc_debug.spec
+
 # Python
 __pycache__/
 *.pyc
@@ -31,3 +58,10 @@ python/dist/
 # OS
 Thumbs.db
 .DS_Store
+
+# Electron-приложение (интерфейс)
+desktop/node_modules/
+desktop/dist/
+
+# Собранные архивы расширений
+dist/

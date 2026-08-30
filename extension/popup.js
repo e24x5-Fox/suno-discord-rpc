@@ -72,3 +72,23 @@ chrome.runtime.sendMessage({ type: "GET_STATE" }, (response) => {
     updateUI(response.lastData, response.isConnected);
   }
 });
+
+// ── Ручная подстройка задержки звука ────────────────────────────────────────
+const delaySlider = document.getElementById('delay-offset');
+const delayValEl  = document.getElementById('delay-val');
+
+function refreshDelayInfo() {
+  chrome.runtime.sendMessage({ type: "GET_DELAY_INFO" }, (info) => {
+    if (chrome.runtime.lastError || !info) return;
+    delaySlider.value = info.delayOffsetMs;
+    const known = typeof info.targetDelayMs === "number" && info.emaLatencyMs !== null;
+    delayValEl.textContent = known ? `${info.targetDelayMs}мс` : 'авто (нет замера)';
+  });
+}
+
+delaySlider.addEventListener('input', () => {
+  const offsetMs = parseInt(delaySlider.value, 10);
+  chrome.runtime.sendMessage({ type: "SET_DELAY_OFFSET", offsetMs }, () => refreshDelayInfo());
+});
+
+refreshDelayInfo();
