@@ -24,6 +24,13 @@ contextBridge.exposeInMainWorld('sunoApi', {
   quit_app:           ()        => ipcRenderer.invoke('quit_app'),
   get_backend_log:    ()        => ipcRenderer.invoke('get_backend_log'),
 
+  // Расширения браузера лежат готовыми папками внутри установленного
+  // приложения. Ставить их за пользователя нельзя (см. комментарий в main.js),
+  // поэтому мост отдаёт только путь и умеет открыть нужную страницу браузера.
+  get_extensions:          ()    => ipcRenderer.invoke('get_extensions'),
+  open_extensions_folder:  (dir) => ipcRenderer.invoke('open_extensions_folder', dir),
+  open_browser_extensions: (id)  => ipcRenderer.invoke('open_browser_extensions', id),
+
   // Настройки окна и автозапуска — тоже на стороне Electron, и применяются
   // сразу при переключении, без общей кнопки «Сохранить».
   get_window_settings: ()          => ipcRenderer.invoke('get_window_settings'),

@@ -187,6 +187,41 @@
   .log-line{border-bottom:1px solid var(--bg3); padding:4px 0;}
   .log-line.error{color:var(--red, #ef4444);}
   .log-ts{color:var(--text3); margin-right:8px;}
+  /* ── Расширения ─────────────────────────── */
+  .ext-card{
+    background:var(--bg2); border:1px solid var(--bg3); border-radius:12px;
+    padding:14px 16px; margin-bottom:12px;
+  }
+  .ext-head{display:flex; align-items:center; gap:8px; margin-bottom:3px;}
+  .ext-name{font-weight:bold; color:var(--text); font-size:12.5px;}
+  .ext-ver{color:var(--text3); font-size:10.5px;}
+  .ext-tag{
+    font-size:9px; letter-spacing:.06em; text-transform:uppercase;
+    padding:1px 7px; border-radius:999px; margin-left:auto;
+  }
+  .ext-tag.req{background:#3b2a5c; color:#c4b5fd;}
+  .ext-tag.opt{background:var(--bg3); color:var(--text3);}
+  .ext-tag.miss{background:#4a1520; color:#fca5a5;}
+  .ext-note{color:var(--text2); font-size:11px; line-height:1.45; margin-bottom:8px;}
+  .ext-path{
+    background:var(--bg3); color:var(--accent2); border-radius:6px;
+    padding:7px 9px; font-size:10.5px; word-break:break-all; margin-bottom:8px;
+    user-select:text;
+  }
+  .ext-actions{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .btn-mini{
+    background:var(--bg3); color:var(--text2); border:1px solid transparent;
+    border-radius:7px; padding:6px 11px; font-size:11px; cursor:pointer;
+    font-family:inherit;
+  }
+  .btn-mini:hover{background:var(--bg4); color:var(--text); border-color:var(--accent);}
+  .browser-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;}
+  .ext-warn{
+    background:rgba(234,179,8,.08); border:1px solid rgba(234,179,8,.25);
+    border-radius:10px; padding:12px 14px; margin-bottom:16px;
+    color:var(--text2); font-size:11px; line-height:1.5;
+  }
+  .ext-warn b{color:var(--yellow);}
   .icon-grid{display:flex; gap:12px; flex-wrap:wrap; margin-top:4px;}
   .icon-opt{
     background:var(--bg3); border:2px solid transparent; border-radius:12px;
@@ -237,6 +272,7 @@
     <button class="nav-item" data-tab="settings">⚙&nbsp; Настройки</button>
     <button class="nav-item" data-tab="youtube">▶&nbsp; YouTube</button>
     <button class="nav-item" data-tab="idle">💤&nbsp; Ожидание</button>
+    <button class="nav-item" data-tab="extensions">🧩&nbsp; Расширения</button>
     <button class="nav-item" data-tab="stats">📊&nbsp; Статистика</button>
     <button class="nav-item" data-tab="logs" id="nav-logs">⚠&nbsp; Логи <span class="badge" id="logs-badge"></span></button>
     <div class="sidebar-footer">
@@ -543,6 +579,29 @@
       </div>
     </section>
 
+    <!-- ══ РАСШИРЕНИЯ ══ -->
+    <section class="tab" id="tab-extensions">
+      <h1>РАСШИРЕНИЯ БРАУЗЕРА</h1>
+      <p class="subtitle">Уже лежат на диске — скачивать ничего не нужно</p>
+
+      <div class="ext-warn">
+        <b>Почему не ставится само.</b> Chromium-браузеры с 2018 года блокируют
+        установку расширений мимо магазина — раньше так распространялись рекламные
+        и шпионские расширения, и лазейку закрыли для всех. Firefox не загружает
+        неподписанные дополнения вовсе. Поэтому папки распакованы заранее, а
+        последние два клика придётся сделать руками.
+      </div>
+
+      <div id="ext-list"></div>
+
+      <div class="card">
+        <div class="section-title">Открыть страницу расширений</div>
+        <p class="hint">Дальше: «Режим разработчика» → «Загрузить распакованное
+          расширение» → вставить путь, скопированный кнопкой выше.</p>
+        <div class="browser-row" id="browser-row"></div>
+      </div>
+    </section>
+
     <!-- ══ СТАТИСТИКА ══ -->
     <section class="tab" id="tab-stats">
       <h1>СТАТИСТИКА</h1>
@@ -616,6 +675,7 @@ function switchTab(tab){
   if ((tab === "settings" || tab === "youtube" || tab === "idle") && !settingsLoaded) loadSettings();
   if (tab === "settings" && !iconsLoaded) { iconsLoaded = true; loadIcons(); }
   if (tab === "settings" && !windowSettingsLoaded) { windowSettingsLoaded = true; loadWindowSettings(); }
+  if (tab === "extensions") loadExtensions();
   if (tab === "stats") loadStats();
   if (tab === "logs") { loadLogs(); document.getElementById("logs-badge").classList.remove("show"); }
 }
@@ -910,6 +970,92 @@ async function loadWindowSettings(){
     document.getElementById("w-autolaunch-hint").textContent =
       "В режиме разработки автозапуск не регистрируется в системе — флажок только запоминается " +
       "и начнёт работать в собранном приложении.";
+  }
+}
+
+// ── Расширения ────────────────────────────────────────
+// Список приходит из главного процесса: только он знает, куда установщик
+// положил папки (resources рядом с бэкендом) и какие браузеры стоят в системе.
+async function loadExtensions(){
+  const info = await api.get_extensions();
+  const list = document.getElementById("ext-list");
+  list.innerHTML = "";
+
+  for (const ext of info.items){
+    const card = document.createElement("div");
+    card.className = "ext-card";
+
+    const tag = !ext.present
+      ? '<span class="ext-tag miss">не найдено</span>'
+      : (ext.required ? '<span class="ext-tag req">обязательное</span>'
+                      : '<span class="ext-tag opt">по желанию</span>');
+
+    card.innerHTML =
+      '<div class="ext-head">' +
+        '<span class="ext-name"></span>' +
+        '<span class="ext-ver"></span>' + tag +
+      '</div>' +
+      '<div class="ext-note"></div>' +
+      '<div class="ext-path"></div>' +
+      '<div class="ext-actions"></div>';
+
+    // textContent, а не шаблон в innerHTML: названия и пути приходят с диска,
+    // и путь с кавычкой или угловой скобкой сломал бы разметку.
+    card.querySelector(".ext-name").textContent = ext.title;
+    card.querySelector(".ext-ver").textContent = ext.version ? "v" + ext.version : "";
+    card.querySelector(".ext-note").textContent = ext.present
+      ? ext.note
+      : ext.note + " Папка не найдена — приложение запущено из исходников без сборки расширений (npm run extensions).";
+    card.querySelector(".ext-path").textContent = ext.dir;
+
+    const actions = card.querySelector(".ext-actions");
+    if (ext.present){
+      const copy = document.createElement("button");
+      copy.className = "btn-mini";
+      copy.textContent = "📋 Скопировать путь";
+      copy.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(ext.dir);
+          copy.textContent = "✔ Скопировано";
+          setTimeout(() => { copy.textContent = "📋 Скопировать путь"; }, 1500);
+        } catch(e) { copy.textContent = "не вышло скопировать"; }
+      });
+      actions.appendChild(copy);
+
+      const open = document.createElement("button");
+      open.className = "btn-mini";
+      open.textContent = "📂 Открыть папку";
+      open.addEventListener("click", () => api.open_extensions_folder(ext.dir));
+      actions.appendChild(open);
+
+      if (!ext.firefox){
+        const note = document.createElement("span");
+        note.className = "hint";
+        note.style.margin = "0";
+        note.textContent = "В Firefox не работает: нужны offscreen и tabCapture, которых там нет.";
+        actions.appendChild(note);
+      }
+    }
+    list.appendChild(card);
+  }
+
+  const row = document.getElementById("browser-row");
+  row.innerHTML = "";
+  if (info.browsers.length === 0){
+    row.innerHTML = '<span class="hint" style="margin:0;">Ни один поддерживаемый браузер не найден.</span>';
+    return;
+  }
+  for (const b of info.browsers){
+    const btn = document.createElement("button");
+    btn.className = "btn-mini";
+    btn.textContent = b.title;
+    // Firefox открывает about:debugging — там принимается только manifest.json
+    // или подписанный .xpi, и загруженное исчезает при перезапуске браузера.
+    btn.title = b.firefoxOnly
+      ? "about:debugging — временная загрузка, до перезапуска Firefox"
+      : "Страница расширений браузера";
+    btn.addEventListener("click", () => api.open_browser_extensions(b.id));
+    row.appendChild(btn);
   }
 }
 

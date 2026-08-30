@@ -8,7 +8,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "dist": "electron-builder --dir && node set-exe-icon.js && electron-builder --prepackaged dist/win-unpacked"
+    "extensions": "node fetch-extensions.js",
+    "dist": "node fetch-extensions.js && electron-builder --dir && node set-exe-icon.js && electron-builder --prepackaged dist/win-unpacked"
   },
   "devDependencies": {
     "electron": "^31.0.0",
@@ -29,6 +30,10 @@
       {
         "from": "../python/dist/suno-rpc-backend.exe",
         "to": "backend/suno-rpc-backend.exe"
+      },
+      {
+        "from": "extensions-bundle",
+        "to": "extensions"
       }
     ],
     "win": {

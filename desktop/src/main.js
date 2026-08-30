@@ -505,6 +505,125 @@ async function openStatsWindow(page) {
 }
 
 // ══════════════════════════════════════════════
+//  РАСШИРЕНИЯ БРАУЗЕРА
+// ══════════════════════════════════════════════
+
+// Расширения кладутся в установщик готовыми папками (fetch-extensions.js +
+// extraResources), чтобы пользователю не пришлось ничего скачивать. Установить
+// их ЗА пользователя приложение не может и не пытается: Chromium с 2018 года
+// блокирует установку расширений мимо магазина (реестровый ключ с путём к
+// локальному .crx больше не срабатывает — расширение молча отключается), а
+// Firefox не грузит неподписанные XPI вовсе. Поэтому здесь только показ пути и
+// открытие нужной страницы браузера — два клика вместо скачивания и поиска.
+const EXTENSIONS = [
+  {
+    slug: 'suno-rpc-extension',
+    title: 'Suno → Discord RPC',
+    required: true,
+    note: 'Читает плеер suno.com. Без него приложению нечего показывать в Discord.',
+    firefox: false,
+  },
+  {
+    slug: 'youtube-rpc-extension',
+    title: 'YouTube → Discord RPC',
+    required: false,
+    note: 'Показывает видео с YouTube, когда музыка в Suno не играет.',
+    firefox: true,
+  },
+  {
+    slug: 'audio-fx-extension',
+    title: 'Audio FX',
+    required: false,
+    note: 'С Discord не связано: панель эквалайзера, ревёрба и эффектов на suno.com.',
+    firefox: true,
+  },
+];
+
+// В собранном приложении папка лежит в resources рядом с бэкендом. В
+// разработке extensions-bundle может быть не создана (её делает
+// fetch-extensions.js) — тогда вкладка честно скажет, что папки нет, вместо
+// того чтобы показывать несуществующий путь.
+function extensionsDir() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'extensions')
+    : path.join(__dirname, '..', 'extensions-bundle');
+}
+
+function listExtensions() {
+  const root = extensionsDir();
+  return EXTENSIONS.map((ext) => {
+    const dir = path.join(root, ext.slug);
+    let version = null;
+    try {
+      version = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')).version;
+    } catch (e) { /* папки нет — сборка без расширений или запуск из исходников */ }
+    return { ...ext, dir, version, present: version !== null };
+  });
+}
+
+// Страницу расширений нельзя открыть через shell.openExternal: схемы chrome://,
+// edge:// и прочие в системе не зарегистрированы, и Windows на них ругается.
+// Зато браузер принимает такой адрес аргументом командной строки — так и делаем.
+const BROWSERS = [
+  // Пути пишутся ЧЕРЕЗ ПРЯМЫЕ СЛЭШИ намеренно. Windows и Node их принимают
+  // наравне с обратными, зато в строковом литерале не нужно ничего
+  // экранировать: пара «\\» легко теряется при любой правке файла, и тогда
+  // «\firefox» превращается в перевод формата плюс «irefox», путь молча
+  // перестаёт находиться, а браузер просто пропадает из списка без ошибки.
+  { id: 'opera-gx', title: 'Opera GX',        page: 'opera://extensions',
+    paths: ['%LOCALAPPDATA%/Programs/Opera GX/opera.exe'] },
+  { id: 'opera',    title: 'Opera',           page: 'opera://extensions',
+    paths: ['%LOCALAPPDATA%/Programs/Opera/opera.exe'] },
+  { id: 'chrome',   title: 'Chrome',          page: 'chrome://extensions',
+    paths: ['%PROGRAMFILES%/Google/Chrome/Application/chrome.exe',
+            '%PROGRAMFILES(X86)%/Google/Chrome/Application/chrome.exe',
+            '%LOCALAPPDATA%/Google/Chrome/Application/chrome.exe'] },
+  { id: 'edge',     title: 'Edge',            page: 'edge://extensions',
+    paths: ['%PROGRAMFILES(X86)%/Microsoft/Edge/Application/msedge.exe',
+            '%PROGRAMFILES%/Microsoft/Edge/Application/msedge.exe'] },
+  { id: 'yandex',   title: 'Яндекс.Браузер',  page: 'browser://extensions',
+    paths: ['%LOCALAPPDATA%/Yandex/YandexBrowser/Application/browser.exe'] },
+  { id: 'brave',    title: 'Brave',           page: 'brave://extensions',
+    paths: ['%PROGRAMFILES%/BraveSoftware/Brave-Browser/Application/brave.exe'] },
+  { id: 'vivaldi',  title: 'Vivaldi',         page: 'vivaldi://extensions',
+    paths: ['%LOCALAPPDATA%/Vivaldi/Application/vivaldi.exe'] },
+  // Firefox распакованные папки не принимает совсем: в about:debugging
+  // загружается либо manifest.json, либо .xpi, и то лишь до перезапуска.
+  { id: 'firefox',  title: 'Firefox',         page: 'about:debugging#/runtime/this-firefox',
+    firefoxOnly: true,
+    paths: ['%PROGRAMFILES%/Mozilla Firefox/firefox.exe',
+            '%PROGRAMFILES(X86)%/Mozilla Firefox/firefox.exe'] },
+];
+
+function expandEnv(p) {
+  return p.replace(/%([^%]+)%/g, (_m, name) => process.env[name] || process.env[name.toUpperCase()] || '');
+}
+
+function findBrowsers() {
+  const found = [];
+  for (const b of BROWSERS) {
+    for (const raw of b.paths) {
+      const full = expandEnv(raw);
+      if (full && fs.existsSync(full)) {
+        found.push({ id: b.id, title: b.title, page: b.page, exe: full, firefoxOnly: !!b.firefoxOnly });
+        break;
+      }
+    }
+  }
+  return found;
+}
+
+function openBrowserPage(id) {
+  const b = findBrowsers().find((x) => x.id === id);
+  if (!b) return false;
+  // detached + unref: браузер должен пережить закрытие приложения, а не
+  // висеть его дочерним процессом и не умирать вместе с ним.
+  const child = spawn(b.exe, [b.page], { detached: true, stdio: 'ignore' });
+  child.unref();
+  return true;
+}
+
+// ══════════════════════════════════════════════
 //  ВЫХОД
 // ══════════════════════════════════════════════
 
@@ -557,6 +676,20 @@ ipcMain.handle('get_window_settings', () => {
   return out;
 });
 ipcMain.handle('set_window_setting', (_e, { key, value }) => setWindowSetting(key, value));
+
+ipcMain.handle('get_extensions', () => ({
+  dir: extensionsDir(),
+  items: listExtensions(),
+  browsers: findBrowsers().map(({ id, title, firefoxOnly }) => ({ id, title, firefoxOnly })),
+}));
+ipcMain.handle('open_extensions_folder', (_e, dir) => {
+  // Открываем именно папку расширения, а не выделяем её в родителе: пользователь
+  // сюда пришёл, чтобы скормить этот путь браузеру, а не рассматривать соседей.
+  const root = extensionsDir();
+  const target = dir && path.resolve(dir).startsWith(path.resolve(root)) ? dir : root;
+  return shell.openPath(target);
+});
+ipcMain.handle('open_browser_extensions', (_e, id) => openBrowserPage(id));
 
 ipcMain.handle('get_icon_settings', () => ({
   current: uiSettings.iconVariant,
