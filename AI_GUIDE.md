@@ -21,8 +21,12 @@ suno.com (браузер)
 
 ### Два источника активности: Suno и YouTube
 
-К серверу параллельно подключаются ДВА расширения: `extension/` (Suno) и
-`youtube-extension/` (YouTube). Различаются они полем `source` в сообщении
+К серверу параллельно подключаются ДВА расширения:
+[suno-rpc-extension](https://github.com/e24x5-Fox/suno-rpc-extension) (Suno) и
+[youtube-rpc-extension](https://github.com/e24x5-Fox/youtube-rpc-extension)
+(YouTube). **Оба живут в собственных репозиториях, а не в этом** — правка
+протокола затрагивает два репозитория сразу и одним коммитом не делается.
+Различаются они полем `source` в сообщении
 (`"suno"` / `"youtube"`); если поля нет, данные считаются суновскими — так
 продолжают работать старые сборки расширения.
 
@@ -521,23 +525,20 @@ Windows поверх правого края в заданных цветах �
 
 ## Файлы проекта
 
+Расширения вынесены в отдельные репозитории (2026-08-30) — в этом репозитории
+их файлов больше нет, и искать их здесь бесполезно:
+
+| Репозиторий | Что внутри |
+|---|---|
+| [suno-rpc-extension](https://github.com/e24x5-Fox/suno-rpc-extension) | `content.js` читает DOM suno.com и шлёт `TRACK_UPDATE` каждые 2 сек; `background.js` — WebSocket-клиент на `localhost:6969`; `offscreen.js` — FFT |
+| [youtube-rpc-extension](https://github.com/e24x5-Fox/youtube-rpc-extension) | `content.js` читает `<video>`, канал и id ролика, шлёт `source:"youtube"`; `background.js` — POST на `http://127.0.0.1:6972/api/source_update` |
+| [audio-fx-extension](https://github.com/e24x5-Fox/audio-fx-extension) | С сервером не связано вообще: панель эффектов Web Audio на suno.com |
+
+У каждого свой `build.py`, упаковывающий в `dist/*.zip` и `dist/*.xpi`. Разбор
+селекторов DOM и формата сообщений остаётся здесь, в этом файле: бэкенд зависит
+от формы данных, и держать её описание рядом с бэкендом полезнее.
+
 ```
-youtube-extension/       — ставится отдельно; работает в Chrome и Firefox
-├── manifest.json    — MV3; и service_worker (Chrome), и scripts (Firefox),
-│                      browser_specific_settings.gecko для Firefox
-├── content.js       — читает <video>, канал и id ролика; шлёт source:"youtube"
-├── background.js    — POST на http://127.0.0.1:6972/api/source_update
-└── popup.html/js    — что расширение сейчас отправляет
-
-build-extension.py       — упаковка расширения в dist/*.zip и dist/*.xpi
-
-extension/
-├── manifest.json    — MV3, permissions: activeTab, scripting, storage
-├── content.js       — читает DOM, отправляет TRACK_UPDATE каждые 2 сек
-├── background.js    — service worker, WebSocket клиент на localhost:6969
-├── popup.html       — UI расширения (статус + трек)
-└── popup.js         — запрашивает GET_STATE у background, рендерит UI
-
 python/
 ├── suno_rpc.py      — headless-бэкенд: asyncio, WebSocket-серверы, AioPresence,
 │                      control API. Окон не создаёт вообще.

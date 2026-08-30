@@ -74,34 +74,26 @@ Electron сам запустит Python-бэкенд, поэтому отдел�
 
 ---
 
-### Шаг 3 — Установи расширение в Chrome
+### Шаг 3 — Установи расширение браузера
 
-1. Открой Chrome → адресная строка → `chrome://extensions`
-2. Включи **"Режим разработчика"** (переключатель справа вверху)
-3. Нажми **"Загрузить распакованное расширение"**
-4. Выбери папку `extension` из этого архива
-5. Расширение появится в панели браузера
+Расширения живут в отдельных репозиториях — там же их установка, сборка и issues:
+
+| Репозиторий | Зачем | Браузеры |
+|---|---|---|
+| **[suno-rpc-extension](https://github.com/e24x5-Fox/suno-rpc-extension)** | **Обязательное.** Читает плеер suno.com | Chromium |
+| **[youtube-rpc-extension](https://github.com/e24x5-Fox/youtube-rpc-extension)** | По желанию: активность YouTube, когда Suno молчит | Chromium, Firefox |
+| **[audio-fx-extension](https://github.com/e24x5-Fox/audio-fx-extension)** | Не связано с RPC: эквалайзер, ревёрб, дилей, 8D для suno.com | Chromium, Firefox |
+
+Коротко для основного: `chrome://extensions` → «Режим разработчика» →
+«Загрузить распакованное расширение» → папка склонированного репозитория.
 
 > ⚠️ **Важно:** расширение работает только пока запущено приложение.
 > Запускай `Suno RPC` **перед** тем как открываешь Suno.
 
----
-
-### Шаг 4 (по желанию) — расширение для YouTube
-
-Работает в Chrome, Edge, Яндекс.Браузере, Opera и **Firefox**. Готовые архивы
-лежат в `dist/` (пересобрать: `python build-extension.py`).
-
-**Chrome и другие Chromium-браузеры:** `chrome://extensions` → «Режим
-разработчика» → «Загрузить распакованное расширение» → папка
-**`youtube-extension`**.
-
-**Firefox:** `about:debugging` → «Этот Firefox» → «Загрузить временное
-дополнение» → файл **`dist/youtube-extension-1.0.0.xpi`**.
-
-> ⚠️ Временное дополнение Firefox исчезает при перезапуске браузера — это
-> ограничение самого Firefox для неподписанных расширений. Чтобы оно ставилось
-> навсегда, архив нужно подписать на [addons.mozilla.org](https://addons.mozilla.org).
+Suno-расширение в Firefox не работает, и дело не в упаковке: оно опирается на
+`offscreen` и `tabCapture` (оба только в Chromium), а `ws://` Firefox из
+контекста расширения не выпускает вовсе. YouTube-расширение поэтому и сделано
+на обычном HTTP — оно в Firefox работает штатно.
 
 После установки видео с YouTube будет показываться в Discord, когда в Suno
 ничего не играет.
@@ -167,14 +159,6 @@ Electron сам запустит Python-бэкенд, поэтому отдел�
 
 ```
 suno-discord-rpc/
-├── extension/            ← папка расширения Chrome
-│   ├── manifest.json
-│   ├── content.js        ← читает данные плеера со страницы
-│   ├── background.js     ← WebSocket клиент + аудиозахват
-│   ├── offscreen.js/html ← FFT-анализ звука для визуализации
-│   ├── popup.html        ← интерфейс расширения
-│   ├── popup.js
-│   └── icons/
 ├── desktop/              ← Electron-приложение (окно, трей, меню)
 │   ├── package.json
 │   └── src/
@@ -182,15 +166,6 @@ suno-discord-rpc/
 │       ├── preload.js    ← мост между окном и бэкендом
 │       ├── index.html    ← интерфейс
 │       └── icons/
-├── youtube-extension/    ← расширение для YouTube (Chrome и Firefox, ставится отдельно)
-│   ├── manifest.json     ← MV3 + browser_specific_settings для Firefox
-│   ├── content.js        ← читает плеер YouTube
-│   ├── background.js     ← HTTP-клиент (не WebSocket, см. ниже)
-│   └── popup.html/js
-├── audio-fx-extension/   ← отдельное расширение: панель эквалайзера и эффектов
-│   ├── manifest.json        для любого audio/video на любом сайте
-│   ├── content.js
-│   └── panel.css
 ├── python/
 │   ├── suno_rpc.py       ← бэкенд: WebSocket серверы + Discord RPC + control API
 │   ├── suno_stats.py     ← статистика прослушиваний, HTML-отчёт
@@ -198,9 +173,14 @@ suno-discord-rpc/
 │   ├── requirements.txt
 │   └── suno_rpc.spec     ← сборка бэкенда (PyInstaller)
 ├── build.bat             ← полная сборка установщика
-├── build-icons.py        ← генерирует наборы иконок из исходных PNG
-└── build-extension.py    ← пакует расширения в .zip / .xpi
+└── build-icons.py        ← генерирует наборы иконок из исходных PNG
 ```
+
+Расширения — в отдельных репозиториях
+([suno-rpc-extension](https://github.com/e24x5-Fox/suno-rpc-extension),
+[youtube-rpc-extension](https://github.com/e24x5-Fox/youtube-rpc-extension),
+[audio-fx-extension](https://github.com/e24x5-Fox/audio-fx-extension)), у
+каждого свой `build.py` для упаковки в `.zip`/`.xpi`.
 
 > Расширение для YouTube ходит к бэкенду по HTTP, а не по WebSocket, как
 > Suno-расширение. Firefox не выпускает `ws://` из контекста расширения:
