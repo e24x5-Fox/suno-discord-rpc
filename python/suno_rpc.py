@@ -19,6 +19,7 @@ import io
 import os
 import ctypes
 import configparser
+import re
 
 # ── Защита от повторного запуска ──────────────────────────────────────────────
 # Единственность интерфейса обеспечивает Electron (requestSingleInstanceLock),
@@ -176,6 +177,11 @@ broadcast_clients: set = set()   # подписчики broadcast API
 cfg = configparser.ConfigParser()
 BROADCAST_PORT    = 6970
 
+# Ветка, а не тег: ссылка должна оставаться рабочей и после добавления новых
+# иконок, без правки конфигов у тех, кто уже поставил приложение.
+ICON_ASSET_BASE = ("https://raw.githubusercontent.com/e24x5-Fox/suno-discord-rpc/"
+                   "desktop-app/desktop/src/icons/source/")
+
 cfg["settings"] = {
     "discord_client_id": DISCORD_CLIENT_ID,
     "websocket_port":    str(WEBSOCKET_PORT),
@@ -192,6 +198,20 @@ cfg["settings"] = {
     "youtube_enabled":       "true",
     "youtube_activity_type": "watching",
     "youtube_app_name":      "YouTube",
+    # ── Иконка приложения в самой активности ────────────────────────────────
+    # Какой вариант иконки выбран, знает Electron (ui-settings.json): трей надо
+    # нарисовать до того, как бэкенд поднимется. Сюда значение приезжает через
+    # /api/set_icon_variant и хранится, чтобы после перезапуска бэкенда картинка
+    # была верной ещё до того, как интерфейс успеет о ней сообщить.
+    "icon_variant":      "play",
+    # Ключа icon_asset_base здесь намеренно нет, хотя app_icon_url() его читает:
+    # попав в suno_rpc.cfg, он застыл бы там навсегда и пережил бы обновление
+    # приложения — при переезде иконок на другую ветку у всех, кто уже запускал
+    # программу, ссылки остались бы старыми. Значение по умолчанию берётся из
+    # константы ICON_ASSET_BASE, а ключ в конфиге остаётся способом переопределить
+    # адрес вручную.
+    # Маленький кружок поверх обложки трека.
+    "app_icon_small":    "true",
 }
 cfg["buttons"] = {
     "btn1_enabled":  "false",
@@ -214,7 +234,11 @@ cfg["idle"] = {
     "app_name":      "",
     "details":       "Ничего не играет",
     "state":         "Слушал {tracks} треков · {hours}",
+    # Пустой large_image + use_app_icon = "true" означает «взять иконку
+    # приложения»: у шаблона ожидания своей картинки обычно нет, а показывать
+    # в тишине именно значок приложения — самое осмысленное.
     "large_image":   "",
+    "use_app_icon":  "true",
     "large_text":    "",
     "small_text":    "",
     "show_timer":    "false",
@@ -236,6 +260,22 @@ cfg["buttons_youtube"] = {
     "btn2_label":    "Мой канал",
     "btn2_url":      "",
 }
+
+def app_icon_url() -> str:
+    """Ссылка на картинку выбранной иконки приложения для Discord.
+
+    Пустая строка означает «иконки нет» — вызывающий должен молча обойтись без
+    неё, а не подставлять заглушку: неверная ссылка в large_image/small_image
+    даёт у Discord пустой серый квадрат, что хуже отсутствия картинки.
+    """
+    base    = (cfg["settings"].get("icon_asset_base") or ICON_ASSET_BASE).strip()
+    variant = (cfg["settings"].get("icon_variant") or "").strip()
+    if not base or not variant:
+        return ""
+    if not base.endswith("/"):
+        base += "/"
+    return f"{base}{variant}.png"
+
 
 def load_config():
     global DISCORD_CLIENT_ID, WEBSOCKET_PORT, UPDATE_INTERVAL, BROADCAST_PORT
@@ -439,6 +479,7 @@ class Api:
             "idle_details":       idl.get("details", ""),
             "idle_state":         idl.get("state", ""),
             "idle_large_image":   idl.get("large_image", ""),
+            "idle_use_app_icon":  idl.get("use_app_icon", "true").lower() == "true",
             "idle_large_text":    idl.get("large_text", ""),
             "idle_small_text":    idl.get("small_text", ""),
             "idle_show_timer":    idl.get("show_timer", "false").lower() == "true",
@@ -448,6 +489,7 @@ class Api:
             "idle_btn2_enabled":  idl.get("btn2_enabled", "false") == "true",
             "idle_btn2_label":    idl.get("btn2_label", ""),
             "idle_btn2_url":      idl.get("btn2_url", ""),
+            "app_icon_small":        cfg["settings"].get("app_icon_small", "true").lower() == "true",
             "youtube_enabled":       cfg["settings"].get("youtube_enabled", "true").lower() == "true",
             "youtube_activity_type": cfg["settings"].get("youtube_activity_type", "watching"),
             "youtube_app_name":      cfg["settings"].get("youtube_app_name", "YouTube"),
@@ -510,6 +552,7 @@ class Api:
             pass
 
         cfg["settings"]["show_elapsed"]      = str(bool(payload.get("show_elapsed"))).lower()
+        cfg["settings"]["app_icon_small"]    = str(bool(payload.get("app_icon_small"))).lower()
         cfg["settings"]["autostart_discord"] = str(bool(payload.get("autostart_discord"))).lower()
         cfg["settings"]["activity_type"]     = payload.get("activity_type") or "playing"
         cfg["settings"]["app_name"]          = (payload.get("app_name") or "").strip()
@@ -554,6 +597,7 @@ class Api:
         idl["details"]       = (payload.get("idle_details") or "").strip()
         idl["state"]         = (payload.get("idle_state") or "").strip()
         idl["large_image"]   = (payload.get("idle_large_image") or "").strip()
+        idl["use_app_icon"]  = str(bool(payload.get("idle_use_app_icon"))).lower()
         idl["large_text"]    = (payload.get("idle_large_text") or "").strip()
         idl["small_text"]    = (payload.get("idle_small_text") or "").strip()
         idl["show_timer"]    = str(bool(payload.get("idle_show_timer"))).lower()
@@ -578,6 +622,29 @@ class Api:
     def reconnect_discord(self):
         if async_loop:
             asyncio.run_coroutine_threadsafe(_reconnect_discord_async(), async_loop)
+        return {"ok": True}
+
+    def set_icon_variant(self, variant: str):
+        """Принимает выбранный в интерфейсе вариант иконки.
+
+        Выбор живёт у Electron, но Discord картинку с диска не возьмёт, поэтому
+        бэкенду нужно знать имя варианта — из него собирается публичная ссылка
+        (app_icon_url). Сброс last_update и idle_shown обязателен: без него
+        новая иконка доехала бы до Discord только со следующим треком, а в
+        тишине — не доехала бы вовсе, потому что шаблон уже показан.
+        """
+        global last_update, idle_shown
+        variant = (variant or "").strip()
+        # Имя подставляется в URL, поэтому пускаем только то, из чего состоят
+        # слаги вариантов: путь наружу и любые кавычки исключены.
+        if not variant or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", variant):
+            return {"ok": False, "error": "bad variant"}
+        if cfg["settings"].get("icon_variant") != variant:
+            cfg["settings"]["icon_variant"] = variant
+            save_config()
+            last_update = 0
+            idle_shown  = False
+            log_event(f"🖼  Иконка приложения: {variant}")
         return {"ok": True}
 
     def disconnect_discord(self):
@@ -669,8 +736,12 @@ async def shutdown(reason: str = "команда интерфейса"):
 DISCORD_CONNECT_TIMEOUT = 10   # секунд
 
 
-async def connect_discord():
+async def connect_discord(quiet: bool = False):
     """Подключается к локальному Discord, не подвешивая приложение навсегда.
+
+    quiet=True глушит запись в журнал ошибок: сторож discord_watcher() ходит
+    сюда раз в DISCORD_RETRY_SEC секунд, и пока Discord просто не запущен, он
+    бы забил журнал одной и той же строкой.
 
     pypresence ходит в Discord через именованный пайп Windows и, если клиент не
     запущен, не отваливается с ошибкой, а ждёт неопределённо долго. Пока
@@ -687,24 +758,81 @@ async def connect_discord():
         log_event("✅ Discord подключён!")
         return True
     except asyncio.TimeoutError:
-        log_error(f"⚠️  Discord не ответил за {DISCORD_CONNECT_TIMEOUT} с — "
-                  f"вероятно, клиент не запущен. Нажмите «Переподключить», когда откроете Discord.")
+        if not quiet:
+            log_error(f"⚠️  Discord не ответил за {DISCORD_CONNECT_TIMEOUT} с — "
+                      f"вероятно, клиент не запущен. Подключение произойдёт само, когда вы его откроете.")
         rpc = None
         discord_ok = False
         state["discord"] = False
         return False
     except Exception as e:
-        log_error(f"⚠️  Discord недоступен: {e}")
+        if not quiet:
+            log_error(f"⚠️  Discord недоступен: {e}")
+        rpc = None
         discord_ok = False
         state["discord"] = False
         return False
 
 
+# ── Автовосстановление связи ───────────────────────────────────────────────
+# Пайп Discord закрывается не только когда клиент выключают: он рвётся при
+# перезапуске и автообновлении Discord и при выходе компьютера из сна. Сам по
+# себе разрыв ничем себя не выдаёт — pypresence узнаёт о нём только в момент
+# отправки. До появления этих двух функций мёртвое соединение жило до ручного
+# «Переподключить»: state["discord"] оставался True, интерфейс писал «Discord
+# подключён», а в профиле не было ничего (жалоба пользователя 2026-08-31).
+DISCORD_RETRY_SEC = 15   # как часто сторож пробует поднять связь заново
+
+
+def _mark_discord_lost(err) -> None:
+    """Пометить соединение мёртвым, чтобы discord_watcher() поднял его заново.
+
+    Сбрасывает заодно idle_shown и last_update: после восстановления активность
+    должна выставиться сразу. Без сброса шаблон ожидания считался бы уже
+    показанным и не переотправлялся бы уже никогда — активность так и осталась
+    бы пустой при полностью живом соединении.
+    """
+    global rpc, discord_ok, idle_shown, last_update
+    log_error(f"⚠️  Связь с Discord потеряна ({err}) — восстанавливаю...")
+    if rpc is not None:
+        try:
+            rpc.close()
+        except Exception:
+            pass
+    rpc = None
+    discord_ok = False
+    state["discord"] = False
+    idle_shown  = False
+    last_update = 0
+
+
+async def discord_watcher():
+    """Поднимает связь с Discord, пока она не восстановится.
+
+    Нужен именно фоновый цикл, а не одна попытка при старте: приложение
+    штатно запускается раньше Discord (автозагрузка Windows), и одноразовый
+    connect оставлял rpc = None до конца сеанса.
+    """
+    reported = False
+    while True:
+        await asyncio.sleep(DISCORD_RETRY_SEC)
+        if rpc is not None and discord_ok:
+            reported = False
+            continue
+        if cfg["settings"].get("autostart_discord", "true").lower() != "true":
+            continue
+        reported = not await connect_discord(quiet=reported)
+
+
 async def _reconnect_discord_async():
-    global rpc, discord_ok
+    global rpc, discord_ok, idle_shown, last_update
     log_event("🔄 Переподключение к Discord...")
     discord_ok = False
     state["discord"] = False
+    # Иначе после ручного переподключения в режиме ожидания шаблон считался бы
+    # уже показанным и активность оставалась бы пустой до следующего трека.
+    idle_shown  = False
+    last_update = 0
     if rpc:
         try:
             await rpc.clear()
@@ -812,6 +940,14 @@ async def update_presence(data: dict, source: str = "suno"):
             large_image=cover if cover else (
                 "https://www.youtube.com/favicon.ico" if is_youtube else "https://suno.com/favicon.ico"),
         )
+
+        # Маленький кружок поверх обложки — иконка приложения. Discord рисует
+        # его ТОЛЬКО когда задан small_image: одного small_text для этого мало,
+        # и до появления этой строки подпись «Suno AI» никуда не попадала.
+        if cfg["settings"].get("app_icon_small", "true").lower() == "true":
+            icon = app_icon_url()
+            if icon:
+                kwargs["small_image"] = icon
         if name_override:
             kwargs["name"] = name_override[:128]
 
@@ -858,12 +994,10 @@ async def update_presence(data: dict, source: str = "suno"):
         print(f"{sym}  [{tag}] {title} — {artist}  [{me}:{se:02d} / {md}:{sd:02d}]")
 
     except Exception as e:
-        log_error(f"⚠️  Ошибка RPC: {e}")
-        try:
-            rpc = AioPresence(DISCORD_CLIENT_ID)
-            await asyncio.wait_for(rpc.connect(), timeout=DISCORD_CONNECT_TIMEOUT)
-        except Exception:
-            rpc = None
+        # Ошибка отправки — почти всегда закрытый пайп. Поднимать связь прямо
+        # здесь нельзя: connect висит до DISCORD_CONNECT_TIMEOUT и подвесил бы
+        # вместе с собой обработку сообщений расширения. Этим занят сторож.
+        _mark_discord_lost(e)
 
 
 # ══════════════════════════════════════════════
@@ -931,6 +1065,12 @@ def _make_broadcast_payload(data: dict, source: str = "suno") -> dict:
 
 IDLE_CHECK_SEC = 5    # как часто проверять, не пропали ли источники
 idle_shown = False    # шаблон уже выставлен — не переставлять его каждые 5 секунд
+idle_shown_at = 0.0   # когда именно выставлен: раз в минуту шаблон шлётся заново
+# Перезапуск Discord во время тишины иначе проходил незамеченным: активности в
+# профиле уже нет, а приложение молчит и потому не узнаёт о закрытом пайпе.
+# Повторная отправка того же шаблона возвращает активность и служит проверкой
+# связи. Раз в минуту — Discord разрешает пять обновлений за двадцать секунд.
+IDLE_REFRESH_SEC = 60
 
 
 def _idle_placeholders() -> dict:
@@ -980,7 +1120,7 @@ async def apply_idle_presence():
     """
     global last_update
     if rpc is None:
-        return
+        return False
 
     if cfg["idle"].get("enabled", "true").lower() != "true":
         # Шаблон выключен — честно снимаем активность. Оставлять висеть трек,
@@ -988,9 +1128,10 @@ async def apply_idle_presence():
         try:
             await rpc.clear()
             log_event("💤 Источников нет — активность снята")
+            return True
         except Exception as e:
-            log_error(f"⚠️  Не удалось снять активность: {e}")
-        return
+            _mark_discord_lost(f"снятие активности: {e}")
+            return False
 
     i = cfg["idle"]
     values = _idle_placeholders()
@@ -1007,7 +1148,11 @@ async def apply_idle_presence():
     # Картинка задаётся ссылкой или ключом ассета из Discord Developer Portal:
     # локальные файлы приложения сюда не подходят — Discord тянет изображение
     # сам и до диска пользователя не достаёт.
+    # Своя картинка шаблона важнее: если пользователь указал ассет или ссылку
+    # руками, иконка приложения её не перебивает.
     img = (i.get("large_image", "") or "").strip()
+    if not img and i.get("use_app_icon", "true").lower() == "true":
+        img = app_icon_url()
     if img:
         kwargs["large_image"] = img
         lt = _fill_template(i.get("large_text", ""), values).strip()
@@ -1034,8 +1179,13 @@ async def apply_idle_presence():
         await rpc.update(**kwargs)
         last_update = time.time()
         log_event(f"💤 Шаблон ожидания: {kwargs.get('details') or '—'}")
+        return True
     except Exception as e:
-        log_error(f"⚠️  Ошибка шаблона ожидания: {e}")
+        # Раньше здесь был только лог, и закрытый пайп оставался незамеченным:
+        # ровно так связь с Discord и умирала молча. Отправка шаблона — самая
+        # частая, а в тишине и единственная точка, где обрыв вообще заметен.
+        _mark_discord_lost(f"шаблон ожидания: {e}")
+        return False
 
 
 async def idle_watcher():
@@ -1046,7 +1196,7 @@ async def idle_watcher():
     не срабатывает ничего, и без этого сторожа в Discord так и висел бы
     последний трек.
     """
-    global active_source, idle_shown, last_update
+    global active_source, idle_shown, idle_shown_at, last_update
     while True:
         await asyncio.sleep(IDLE_CHECK_SEC)
         try:
@@ -1071,10 +1221,13 @@ async def idle_watcher():
                 state["duration"]  = 0
             state["source"] = "idle"
 
-            if idle_shown:
+            if idle_shown and time.time() - idle_shown_at < IDLE_REFRESH_SEC:
                 continue
-            await apply_idle_presence()
-            idle_shown = True
+            # Флаг ставим только на успешной отправке: иначе оборванная связь
+            # считалась бы показанным шаблоном и повтора уже не случилось бы.
+            if await apply_idle_presence():
+                idle_shown    = True
+                idle_shown_at = time.time()
         except Exception as e:
             log_error(f"⚠️  Ошибка сторожа ожидания: {e}")
 
@@ -1301,6 +1454,10 @@ async def start_control_server():
     async def h_reconnect(request):
         return aiohttp_web.json_response(api.reconnect_discord())
 
+    async def h_set_icon(request):
+        body = await _body(request)
+        return aiohttp_web.json_response(api.set_icon_variant(body.get("variant") or ""))
+
     async def h_disconnect(request):
         return aiohttp_web.json_response(api.disconnect_discord())
 
@@ -1362,6 +1519,7 @@ async def start_control_server():
     app.router.add_get ("/api/get_config",        h_get_config)
     app.router.add_post("/api/save_config",       h_save_config)
     app.router.add_post("/api/reconnect_discord", h_reconnect)
+    app.router.add_post("/api/set_icon_variant",  h_set_icon)
     app.router.add_post("/api/disconnect_discord", h_disconnect)
     app.router.add_get ("/api/get_logs",          h_get_logs)
     app.router.add_get ("/api/get_stats_summary", h_stats_summary)
@@ -1517,6 +1675,7 @@ def run_async_loop():
             start_mobile_sync_server(),
             start_control_server(),
             idle_watcher(),
+            discord_watcher(),
         )
 
     loop.run_until_complete(start())

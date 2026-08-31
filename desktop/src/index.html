@@ -230,7 +230,12 @@
   .guide-txt{flex:1 1 260px; display:flex; flex-direction:column; gap:2px;}
   .guide-txt b{color:var(--accent2); font-size:12.5px;}
   .guide-txt span{color:var(--text2); font-size:11px; line-height:1.45;}
-  .icon-grid{display:flex; gap:12px; flex-wrap:wrap; margin-top:4px;}
+  /* Вариантов больше сорока, поэтому сетка своя прокручиваемая область:
+     иначе вкладка настроек растягивается на несколько экранов, а всё, что под
+     иконками, становится недостижимым без долгой прокрутки. */
+  .icon-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr));
+             gap:8px; margin-top:4px; max-height:330px; overflow-y:auto;
+             padding:4px; background:var(--bg2); border-radius:8px;}
   .icon-opt{
     background:var(--bg3); border:2px solid transparent; border-radius:12px;
     padding:10px 10px 8px; cursor:pointer; text-align:center; width:104px;
@@ -238,7 +243,7 @@
   }
   .icon-opt:hover{background:var(--bg4);}
   .icon-opt.active{border-color:var(--accent); background:var(--bg4);}
-  .icon-opt img{width:64px; height:64px; display:block; margin:0 auto 6px;}
+  .icon-opt img{width:56px; height:56px; display:block; margin:0 auto 5px;}
   .icon-opt span{font-size:10px; color:var(--text2); line-height:1.3; display:block;}
   .icon-opt.active span{color:var(--text);}
   /* Значок рядом с названием: при двух источниках без него непонятно, чьё
@@ -349,6 +354,7 @@
           <input type="number" id="f-update-interval">
         </div>
         <label class="checkbox-row"><input type="checkbox" id="f-show-elapsed"> Показывать прошедшее время</label>
+        <label class="checkbox-row"><input type="checkbox" id="f-app-icon-small"> Иконка приложения в маленьком кружке поверх обложки</label>
         <label class="checkbox-row"><input type="checkbox" id="f-autostart"> Автоподключение Discord при старте</label>
       </div>
 
@@ -365,6 +371,9 @@
       <div class="card">
         <div class="section-title">Иконка приложения</div>
         <p class="hint">Применяется сразу — к трею, кнопке на панели задач и окну.</p>
+        <label class="checkbox-row" style="margin-bottom:8px;">
+          <input type="checkbox" id="icon-solid"> Сплошной угол
+        </label>
         <div class="icon-grid" id="icon-grid"></div>
         <p class="hint" style="margin-top:10px;">
           Иконка самого файла программы в проводнике и у закреплённого ярлыка
@@ -547,6 +556,7 @@
           подходит. Годится прямая ссылка на изображение либо ключ ассета из
           Discord Developer Portal → твоё приложение → Rich Presence → Art Assets.
         </p>
+        <label class="checkbox-row"><input type="checkbox" id="f-idle-use-app-icon"> Взять иконку приложения (если поле ниже пустое)</label>
         <div class="input-row" style="margin-bottom:10px;">
           <input type="text" id="f-idle-large-image" placeholder="https://… или ключ ассета">
           <button class="icon-btn" id="btn-paste-idle-image" title="Вставить">📋</button>
@@ -761,6 +771,7 @@ async function loadSettings(){
   document.getElementById("f-ws-port").value = c.websocket_port;
   document.getElementById("f-update-interval").value = c.update_interval;
   document.getElementById("f-show-elapsed").checked = c.show_elapsed;
+  document.getElementById("f-app-icon-small").checked = c.app_icon_small;
   document.getElementById("f-autostart").checked = c.autostart_discord;
 
   document.getElementById("f-broadcast-enabled").checked = c.broadcast_enabled;
@@ -808,6 +819,7 @@ async function loadSettings(){
   document.getElementById("f-idle-small-text").value   = c.idle_small_text || "";
   document.getElementById("f-idle-show-timer").checked = c.idle_show_timer;
   document.getElementById("f-idle-large-image").value  = c.idle_large_image || "";
+  document.getElementById("f-idle-use-app-icon").checked = c.idle_use_app_icon;
   document.getElementById("f-idle-large-text").value   = c.idle_large_text || "";
 
   const idleAct = c.idle_activity_type || "playing";
@@ -883,6 +895,7 @@ function collectConfig(){
     websocket_port: document.getElementById("f-ws-port").value,
     update_interval: document.getElementById("f-update-interval").value,
     show_elapsed: document.getElementById("f-show-elapsed").checked,
+    app_icon_small: document.getElementById("f-app-icon-small").checked,
     autostart_discord: document.getElementById("f-autostart").checked,
     broadcast_enabled: document.getElementById("f-broadcast-enabled").checked,
     broadcast_port: document.getElementById("f-broadcast-port").value,
@@ -917,6 +930,7 @@ function collectConfig(){
     idle_small_text: document.getElementById("f-idle-small-text").value.trim(),
     idle_show_timer: document.getElementById("f-idle-show-timer").checked,
     idle_large_image: document.getElementById("f-idle-large-image").value.trim(),
+    idle_use_app_icon: document.getElementById("f-idle-use-app-icon").checked,
     idle_large_text: document.getElementById("f-idle-large-text").value.trim(),
     idle_btn1_enabled: document.getElementById("f-idle-btn1-enabled").checked,
     idle_btn1_label: document.getElementById("f-idle-btn1-label").value.trim(),
@@ -941,21 +955,64 @@ document.getElementById("btn-save-idle").addEventListener("click", () => saveCon
 // ── Иконка приложения ─────────────────────────────────
 // Живёт отдельно от остальных настроек: сохраняется у Electron и применяется
 // сразу по клику, поэтому кнопка «Сохранить» ей не нужна.
+// Каждый образ существует в двух вариантах — обычном и «-solid» (залитый
+// правый нижний угол). Показывать их сорока с лишним отдельными плитками
+// бессмысленно: половина сетки была бы визуальными дублями соседа. Поэтому
+// плитка одна на образ, а угол выбирается общим переключателем.
+const iconBase  = (id) => id.replace(/-solid$/, "");
+const iconSolid = (id) => id.endsWith("-solid");
+
 async function loadIcons(){
   const info = await api.get_icon_settings();
   const grid = document.getElementById("icon-grid");
-  grid.innerHTML = "";
+  const solidBox = document.getElementById("icon-solid");
+
+  // Образы в порядке из main.js; подпись берём у обычного варианта, чтобы в
+  // плитке не висело «(сплошной угол)» при включённом переключателе.
+  const bases = [];
   for (const v of info.variants){
-    const el = document.createElement("div");
-    el.className = "icon-opt" + (v.id === info.current ? " active" : "");
-    el.innerHTML = `<img src="icons/variants/${v.id}-preview.png" alt=""><span>${v.label}</span>`;
-    el.addEventListener("click", async () => {
-      if (!(await api.set_icon_variant(v.id))) return;
-      grid.querySelectorAll(".icon-opt").forEach(n => n.classList.remove("active"));
-      el.classList.add("active");
-    });
-    grid.appendChild(el);
+    const base = iconBase(v.id);
+    if (!bases.some(b => b.base === base)){
+      bases.push({ base, label: v.label.replace(/ \(сплошной угол\)$/, ""),
+                   hasSolid: false });
+    }
+    if (iconSolid(v.id)) bases.find(b => b.base === base).hasSolid = true;
   }
+
+  let current = info.current;
+  solidBox.checked = iconSolid(current);
+
+  const idFor = (b) => (solidBox.checked && b.hasSolid) ? `${b.base}-solid` : b.base;
+
+  const render = () => {
+    grid.innerHTML = "";
+    for (const b of bases){
+      const id = idFor(b);
+      const el = document.createElement("div");
+      el.className = "icon-opt" + (id === current ? " active" : "");
+      el.innerHTML = `<img src="icons/variants/${id}-preview.png" alt=""><span>${b.label}</span>`;
+      el.addEventListener("click", async () => {
+        if (!(await api.set_icon_variant(id))) return;
+        current = id;
+        grid.querySelectorAll(".icon-opt").forEach(n => n.classList.remove("active"));
+        el.classList.add("active");
+      });
+      grid.appendChild(el);
+    }
+  };
+
+  solidBox.addEventListener("change", async () => {
+    // Переключатель не просто перерисовывает превью: выбранная иконка обязана
+    // сменить угол сразу, иначе галочка стоит, а в трее прежний вариант.
+    const b = bases.find(x => x.base === iconBase(current));
+    if (b){
+      const id = idFor(b);
+      if (id !== current && await api.set_icon_variant(id)) current = id;
+    }
+    render();
+  });
+
+  render();
 }
 
 // ── Окно и запуск ─────────────────────────────────────

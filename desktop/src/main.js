@@ -40,6 +40,48 @@ const ICON_VARIANTS = [
   { id: 'play-solid', label: 'Плеер (сплошной угол)' },
   { id: 'fox',        label: 'Бойкиссер' },
   { id: 'fox-solid',  label: 'Бойкиссер (сплошной угол)' },
+  { id: 'stand', label: 'Во весь рост' },
+  { id: 'stand-solid', label: 'Во весь рост (сплошной угол)' },
+  { id: 'glee', label: 'Интересное радостное чувство' },
+  { id: 'glee-solid', label: 'Интересное радостное чувство (сплошной угол)' },
+  { id: 'cute-wow', label: 'Милое удивление' },
+  { id: 'cute-wow-solid', label: 'Милое удивление (сплошной угол)' },
+  { id: 'huh', label: 'Не понял' },
+  { id: 'huh-solid', label: 'Не понял (сплошной угол)' },
+  { id: 'sulk', label: 'Обида' },
+  { id: 'sulk-solid', label: 'Обида (сплошной угол)' },
+  { id: 'sad', label: 'Огорчение' },
+  { id: 'sad-solid', label: 'Огорчение (сплошной угол)' },
+  { id: 'sprawl', label: 'Ожидание (развалился)' },
+  { id: 'sprawl-solid', label: 'Ожидание (развалился) (сплошной угол)' },
+  { id: 'wait', label: 'Ожидание' },
+  { id: 'wait-solid', label: 'Ожидание (сплошной угол)' },
+  { id: 'chonk', label: 'Просто толстая кость' },
+  { id: 'chonk-solid', label: 'Просто толстая кость (сплошной угол)' },
+  { id: 'shy', label: 'Смущение' },
+  { id: 'shy-solid', label: 'Смущение (сплошной угол)' },
+  { id: 'shame', label: 'Стыдно' },
+  { id: 'shame-solid', label: 'Стыдно (сплошной угол)' },
+  { id: 'starfish', label: 'Счастье (звёздочкой)' },
+  { id: 'starfish-solid', label: 'Счастье (звёздочкой) (сплошной угол)' },
+  { id: 'joy', label: 'Счастье' },
+  { id: 'joy-solid', label: 'Счастье (сплошной угол)' },
+  { id: 'wow', label: 'Удивление' },
+  { id: 'wow-solid', label: 'Удивление (сплошной угол)' },
+  { id: 'aww', label: 'Умиление' },
+  { id: 'aww-solid', label: 'Умиление (сплошной угол)' },
+  { id: 'aww-2', label: 'Умиление 2' },
+  { id: 'aww-2-solid', label: 'Умиление 2 (сплошной угол)' },
+  { id: 'aww-3', label: 'Умиление 3' },
+  { id: 'aww-3-solid', label: 'Умиление 3 (сплошной угол)' },
+  { id: 'aww-4', label: 'Умиление 4' },
+  { id: 'aww-4-solid', label: 'Умиление 4 (сплошной угол)' },
+  { id: 'calm', label: 'Умиротворение' },
+  { id: 'calm-solid', label: 'Умиротворение (сплошной угол)' },
+  { id: 'tired', label: 'Усталость' },
+  { id: 'tired-solid', label: 'Усталость (сплошной угол)' },
+  { id: 'smirk', label: 'Прищур' },
+  { id: 'smirk-solid', label: 'Прищур (сплошной угол)' },
 ];
 const DEFAULT_VARIANT = ICON_VARIANTS[0].id;
 
@@ -276,6 +318,12 @@ function applyIconVariant(id) {
   if (!ICON_VARIANTS.some((v) => v.id === id)) return false;
   uiSettings.iconVariant = id;
   saveUiSettings(uiSettings);
+
+  // Бэкенду вариант нужен не для показа, а для ссылки: Discord тянет картинку
+  // сам и до файлов приложения не достаёт, поэтому в presence уходит адрес
+  // иконки в репозитории проекта. Ошибку глушим — выбор иконки не должен
+  // отваливаться из-за того, что бэкенд ещё не поднялся.
+  post('set_icon_variant', { variant: id }).catch(() => {});
 
   refreshTray();
   // Иконку окна меняем на лету — она же показывается на панели задач и в
@@ -803,6 +851,9 @@ if (!app.requestSingleInstanceLock()) {
       });
       return;
     }
+    // Тем же путём, но при старте: бэкенд мог перезапуститься сам и не знать,
+    // какую иконку выбрал пользователь.
+    post('set_icon_variant', { variant: uiSettings.iconVariant }).catch(() => {});
     startStatePolling();
   });
 

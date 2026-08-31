@@ -38,12 +38,61 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC_DIR = os.path.join(ROOT, "desktop", "src", "icons", "source")
 OUT_DIR = os.path.join(ROOT, "desktop", "src", "icons", "variants")
 
+# Имя файла обязано совпадать со слагом: из слага собирается публичная ссылка
+# на картинку для Discord (app_icon_url в suno_rpc.py), а Discord скачивает её
+# сам. Кириллица в имени сюда не годится — ссылка тогда состоит из процентных
+# escape-последовательностей и ломается при любом переносе файла.
 # Порядок здесь = порядок в настройках; первый вариант считается основным.
+# У каждого образа два варианта: обычный (правый нижний угол вырезан дугой,
+# по ней уходит хвост персонажа) и "-solid" (угол залит до края). В настройках
+# они показываются одной плиткой с общим переключателем, а не двумя подряд.
 VARIANTS = [
-    ("play",      "иконка рпц сервака .png",             "Плеер"),
-    ("play-solid", "иконка рпц сервака 2.png",           "Плеер (сплошной угол)"),
-    ("fox",       "иконка рпц сервака бойкиссер.png",     "Бойкиссер"),
-    ("fox-solid", "иконка рпц сервака бойкиссер 2.png",   "Бойкиссер (сплошной угол)"),
+    ("play",       "play.png",           "Плеер"),
+    ("play-solid", "play-solid.png",          "Плеер (сплошной угол)"),
+    ("fox",        "fox.png",   "Бойкиссер"),
+    ("fox-solid",  "fox-solid.png", "Бойкиссер (сплошной угол)"),
+    ("stand", "stand.png", "Во весь рост"),
+    ("stand-solid", "stand-solid.png", "Во весь рост (сплошной угол)"),
+    ("glee", "glee.png", "Интересное радостное чувство"),
+    ("glee-solid", "glee-solid.png", "Интересное радостное чувство (сплошной угол)"),
+    ("cute-wow", "cute-wow.png", "Милое удивление"),
+    ("cute-wow-solid", "cute-wow-solid.png", "Милое удивление (сплошной угол)"),
+    ("huh", "huh.png", "Не понял"),
+    ("huh-solid", "huh-solid.png", "Не понял (сплошной угол)"),
+    ("sulk", "sulk.png", "Обида"),
+    ("sulk-solid", "sulk-solid.png", "Обида (сплошной угол)"),
+    ("sad", "sad.png", "Огорчение"),
+    ("sad-solid", "sad-solid.png", "Огорчение (сплошной угол)"),
+    ("sprawl", "sprawl.png", "Ожидание (развалился)"),
+    ("sprawl-solid", "sprawl-solid.png", "Ожидание (развалился) (сплошной угол)"),
+    ("wait", "wait.png", "Ожидание"),
+    ("wait-solid", "wait-solid.png", "Ожидание (сплошной угол)"),
+    ("chonk", "chonk.png", "Просто толстая кость"),
+    ("chonk-solid", "chonk-solid.png", "Просто толстая кость (сплошной угол)"),
+    ("shy", "shy.png", "Смущение"),
+    ("shy-solid", "shy-solid.png", "Смущение (сплошной угол)"),
+    ("shame", "shame.png", "Стыдно"),
+    ("shame-solid", "shame-solid.png", "Стыдно (сплошной угол)"),
+    ("starfish", "starfish.png", "Счастье (звёздочкой)"),
+    ("starfish-solid", "starfish-solid.png", "Счастье (звёздочкой) (сплошной угол)"),
+    ("joy", "joy.png", "Счастье"),
+    ("joy-solid", "joy-solid.png", "Счастье (сплошной угол)"),
+    ("wow", "wow.png", "Удивление"),
+    ("wow-solid", "wow-solid.png", "Удивление (сплошной угол)"),
+    ("aww", "aww.png", "Умиление"),
+    ("aww-solid", "aww-solid.png", "Умиление (сплошной угол)"),
+    ("aww-2", "aww-2.png", "Умиление 2"),
+    ("aww-2-solid", "aww-2-solid.png", "Умиление 2 (сплошной угол)"),
+    ("aww-3", "aww-3.png", "Умиление 3"),
+    ("aww-3-solid", "aww-3-solid.png", "Умиление 3 (сплошной угол)"),
+    ("aww-4", "aww-4.png", "Умиление 4"),
+    ("aww-4-solid", "aww-4-solid.png", "Умиление 4 (сплошной угол)"),
+    ("calm", "calm.png", "Умиротворение"),
+    ("calm-solid", "calm-solid.png", "Умиротворение (сплошной угол)"),
+    ("tired", "tired.png", "Усталость"),
+    ("tired-solid", "tired-solid.png", "Усталость (сплошной угол)"),
+    ("smirk", "smirk.png", "Прищур"),
+    ("smirk-solid", "smirk-solid.png", "Прищур (сплошной угол)"),
 ]
 
 WINDOW_SIZES = [16, 24, 32, 48, 64, 128, 256]
