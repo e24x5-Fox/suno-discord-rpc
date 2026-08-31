@@ -29,12 +29,13 @@
 |---|---|
 | Audio FX — эффекты для suno.com | [addons.mozilla.org](https://addons.mozilla.org/ru/firefox/addon/audio-fx-sound-enhancer/) |
 | Suno Stats — своя история прослушиваний | [addons.mozilla.org](https://addons.mozilla.org/ru/firefox/addon/suno-stats/) |
-| Suno → Discord RPC (версия 1.4.0, устаревшая) | [addons.mozilla.org](https://addons.mozilla.org/ru/firefox/addon/suno-discord-rpc/) |
+| Suno → Discord RPC — трек в Discord | [addons.mozilla.org](https://addons.mozilla.org/ru/firefox/addon/suno-discord-rpc/) |
 
-Первые два в Firefox работают полностью — им приложение и не нужно. А вот
-основному расширению нужны `offscreen` и `tabCapture` (есть только в Chromium),
-да и `ws://` Firefox расширениям не выпускает — поэтому **для Suno нужен
-Chrome, Edge, Opera GX или Яндекс**. YouTube-расширения в каталоге пока нет.
+Все три в Firefox работают: трек, исполнитель и время доходят до приложения и
+попадают в Discord. Чего там нет — **звуковой визуализации**: данные о звуке
+собираются через `offscreen` и `tabCapture`, а они есть только в Chromium.
+Нужны оверлей и «волны» — бери Chrome, Edge, Opera GX или Яндекс.
+YouTube-расширения в каталоге пока нет, его ставят вручную.
 
 ---
 
@@ -44,9 +45,11 @@ Chrome, Edge, Opera GX или Яндекс**. YouTube-расширения в к
 
 | Репозиторий | Зачем | Браузеры |
 |---|---|---|
-| **[suno-rpc-extension](https://github.com/e24x5-Fox/suno-rpc-extension)** | **Обязательное.** Читает плеер suno.com | Chromium |
+| **[suno-rpc-extension](https://github.com/e24x5-Fox/suno-rpc-extension)** | **Обязательное.** Читает плеер suno.com | Chromium, Firefox\* |
 | **[youtube-rpc-extension](https://github.com/e24x5-Fox/youtube-rpc-extension)** | Активность YouTube, когда Suno молчит | Chromium, Firefox |
 | **[audio-fx-extension](https://github.com/e24x5-Fox/audio-fx-extension)** | Не про RPC: эквалайзер, ревёрб, дилей, 8D для suno.com | Chromium, Firefox |
+
+\* В Firefox — через версию из каталога Mozilla; звуковая визуализация только в Chromium.
 
 Кто попадёт в Discord, если открыто и то и другое:
 
