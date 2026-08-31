@@ -82,6 +82,7 @@
     padding:2px 7px; border-radius:999px; white-space:nowrap;
   }
   .pill.need{background:var(--accent-soft); color:#c4b5fd;}
+  .pill.ok{background:#14532d; color:#86efac;}
   .pill.opt{background:var(--bg3); color:var(--text3);}
 
   /* ── Шаги ── */
@@ -308,12 +309,44 @@
 
   <hr>
 
-  <h2>Firefox — отдельная история</h2>
-  <p>В Firefox работают только два расширения из трёх: <strong>YouTube → Discord RPC</strong> и
-  <strong>Audio FX</strong>.</p>
-  <p>Основное, Suno → Discord RPC, в Firefox не работает совсем: ему нужны две возможности браузера,
-  которых у Firefox просто нет, и настройками это не чинится. Для Suno нужен Chrome, Edge, Opera
-  или Яндекс.</p>
+  <h2>Firefox — там всё проще</h2>
+  <p>Если распаковывать папки и включать режим разработчика не хочется — в Firefox этого делать и
+  не надо. Расширения опубликованы в каталоге Mozilla: страница, кнопка «Добавить в Firefox», всё.
+  Они подписаны, поэтому не исчезают при перезапуске браузера и обновляются сами.</p>
+
+  <div class="ext-grid">
+    <div class="ext">
+      <div class="glyph">🎛</div>
+      <div class="top"><h3>Audio FX</h3><span class="pill ok">работает</span></div>
+      <p>Панель эффектов на suno.com. Приложение ей не нужно вообще, поэтому в Firefox работает
+      точно так же, как в Chrome.</p>
+      <p><a href="https://addons.mozilla.org/ru/firefox/addon/audio-fx-sound-enhancer/">Открыть в каталоге</a></p>
+    </div>
+    <div class="ext">
+      <div class="glyph">📊</div>
+      <div class="top"><h3>Suno Stats</h3><span class="pill ok">работает</span></div>
+      <p>Ведёт свою историю прослушанных треков прямо в браузере. С приложением не связано и
+      работает само по себе.</p>
+      <p><a href="https://addons.mozilla.org/ru/firefox/addon/suno-stats/">Открыть в каталоге</a></p>
+    </div>
+    <div class="ext">
+      <div class="glyph">🎵</div>
+      <div class="top"><h3>Suno → Discord RPC</h3><span class="pill opt">версия старая</span></div>
+      <p>В каталоге лежит версия 1.4.0, собранная под старые правила Firefox. Она соединяется с
+      приложением так, как нынешний Firefox расширениям уже не позволяет, — трек в Discord с ней
+      может и не появиться.</p>
+      <p><a href="https://addons.mozilla.org/ru/firefox/addon/suno-discord-rpc/">Открыть в каталоге</a></p>
+    </div>
+  </div>
+
+  <div class="note warn" style="margin-top:16px;">
+    <p><strong>Для самого Suno надёжнее Chrome, Edge, Opera GX или Яндекс.</strong> Основному
+    расширению нужны возможности браузера, которых у Firefox нет: без них не будет ни звуковой
+    визуализации, ни, скорее всего, самой связи с приложением. YouTube → Discord RPC в каталоге
+    пока нет — его в Firefox ставят вручную, как описано ниже.</p>
+  </div>
+
+  <p>Поставить вручную (для YouTube-расширения или пока не обновилась версия в каталоге):</p>
   <ol>
     <li>Введите в адресную строку <code>about:debugging</code></li>
     <li>Слева выберите <span class="ui">Этот Firefox</span></li>
@@ -323,7 +356,7 @@
   <div class="note warn">
     <p><strong>Такое дополнение исчезнет при перезапуске Firefox.</strong> Это ограничение самого
     Firefox: он не принимает навсегда дополнения, не подписанные Mozilla. После каждого запуска
-    браузера придётся повторять.</p>
+    браузера придётся повторять — потому версия из каталога и удобнее.</p>
   </div>
 
   <hr>
