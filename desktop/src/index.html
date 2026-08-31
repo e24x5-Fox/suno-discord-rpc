@@ -556,7 +556,7 @@
           подходит. Годится прямая ссылка на изображение либо ключ ассета из
           Discord Developer Portal → твоё приложение → Rich Presence → Art Assets.
         </p>
-        <label class="checkbox-row"><input type="checkbox" id="f-idle-use-app-icon"> Взять иконку приложения (если поле ниже пустое)</label>
+        <label class="checkbox-row"><input type="checkbox" id="f-idle-use-app-icon"> Показывать иконку приложения — ту, что выбрана во вкладке «Настройки»</label>
         <div class="input-row" style="margin-bottom:10px;">
           <input type="text" id="f-idle-large-image" placeholder="https://… или ключ ассета">
           <button class="icon-btn" id="btn-paste-idle-image" title="Вставить">📋</button>
@@ -820,6 +820,7 @@ async function loadSettings(){
   document.getElementById("f-idle-show-timer").checked = c.idle_show_timer;
   document.getElementById("f-idle-large-image").value  = c.idle_large_image || "";
   document.getElementById("f-idle-use-app-icon").checked = c.idle_use_app_icon;
+  syncIdleImageField();
   document.getElementById("f-idle-large-text").value   = c.idle_large_text || "";
 
   const idleAct = c.idle_activity_type || "playing";
@@ -872,6 +873,17 @@ bindPaste("btn-paste-btn1-url", "f-btn1-url");
 bindPaste("btn-paste-btn2-url", "f-btn2-url");
 bindPaste("btn-paste-yt-btn1-url", "f-yt-btn1-url");
 bindPaste("btn-paste-yt-btn2-url", "f-yt-btn2-url");
+// Пока галочка стоит, поле картинки ни на что не влияет — показываем это
+// явно, иначе лежащий в нём с давних пор ключ ассета выглядит как активная
+// настройка, которая почему-то не работает.
+function syncIdleImageField(){
+  const on = document.getElementById("f-idle-use-app-icon").checked;
+  const field = document.getElementById("f-idle-large-image");
+  field.disabled = on;
+  field.style.opacity = on ? 0.45 : 1;
+}
+document.getElementById("f-idle-use-app-icon").addEventListener("change", syncIdleImageField);
+
 bindPaste("btn-paste-idle-image", "f-idle-large-image");
 bindPaste("btn-paste-idle-btn1-url", "f-idle-btn1-url");
 bindPaste("btn-paste-idle-btn2-url", "f-idle-btn2-url");
