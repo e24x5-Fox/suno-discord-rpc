@@ -1,5 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Релизная сборка: без консоли, с иконкой.
+# Сборка headless-бэкенда для Electron-приложения desktop/.
+#
+# console=True — намеренно, хотя окна консоли пользователь не увидит: Electron
+# запускает этот exe через spawn с windowsHide, и в консольной сборке PyInstaller
+# отдаёт родителю настоящие stdout/stderr, которые уходят в лог интерфейса.
+# В windowed-сборке (console=False) их бы не было, и любая ошибка бэкенда
+# оставалась бы невидимой — ровно то, ради чего в интерфейсе есть вкладка «Логи».
 
 HIDDEN_IMPORTS = [
     'websockets',
@@ -14,18 +20,6 @@ HIDDEN_IMPORTS = [
     'pypresence.baseclient',
     'pypresence.payloads',
     'pypresence.utils',
-    'pystray',
-    'pystray._win32',
-    'pystray._base',
-    'PIL',
-    'PIL.Image',
-    'PIL.ImageDraw',
-    'PIL.ImageFont',
-    'PIL.ImageTk',
-    'PIL._tkinter_finder',
-    'tkinter',
-    'tkinter.messagebox',
-    'tkinter.font',
     'asyncio',
     'asyncio.base_events',
     'asyncio.events',
@@ -48,6 +42,7 @@ HIDDEN_IMPORTS = [
     'aiosignal',
     'frozenlist',
     'suno_stats',
+    'youtube_stats',
 ]
 
 a = Analysis(
@@ -59,7 +54,16 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    # Первый список — интерфейс, уехавший в Electron. Второй — пакеты, которые
+    # бэкенд не импортирует вообще: PyInstaller тянул их транзитивно (через
+    # setuptools/pkg_resources и numpy), раздувая exe с ~15 до 77 МБ. Это
+    # особенно важно теперь: сверху в установщик ложится ещё ~150 МБ Electron.
+    excludes=[
+        'pystray', 'PIL', 'webview', 'clr_loader', 'pythonnet', 'tkinter',
+        'numpy', 'matplotlib', 'scipy', 'pandas', 'IPython', 'pytest', '_pytest',
+        'pydantic', 'werkzeug', 'jedi', 'prompt_toolkit', 'rich', 'markdown_it',
+        'pygments', 'PyQt5', 'PySide2', 'setuptools', 'pkg_resources',
+    ],
     noarchive=False,
     optimize=0,
 )
@@ -71,14 +75,14 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='SunoRPC',
+    name='suno-rpc-backend',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

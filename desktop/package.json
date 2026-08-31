@@ -1,0 +1,51 @@
+{
+  "name": "suno-rpc-desktop",
+  "version": "1.5.0",
+  "description": "Suno → Discord Rich Presence — интерфейс и трей",
+  "main": "src/main.js",
+  "author": "e24x5-Fox",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "extensions": "node fetch-extensions.js",
+    "dist": "node fetch-extensions.js && electron-builder --dir && node set-exe-icon.js && electron-builder --prepackaged dist/win-unpacked"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "rcedit": "^5.0.2"
+  },
+  "build": {
+    "appId": "com.e24x5fox.sunorpc",
+    "productName": "Suno RPC",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "!src/icons/source/**",
+      "!src/icons/discord/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../python/dist/suno-rpc-backend.exe",
+        "to": "backend/suno-rpc-backend.exe"
+      },
+      {
+        "from": "extensions-bundle",
+        "to": "extensions"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "src/icons/app.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

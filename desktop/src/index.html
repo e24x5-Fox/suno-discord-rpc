@@ -1,0 +1,1217 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+<title>Suno RPC</title>
+<style>
+  :root{
+    --bg:#0e0e10; --bg2:#18181b; --bg3:#27272a; --bg4:#1c1c1f;
+    --accent:#8b5cf6; --accent2:#a78bfa;
+    --text:#f4f4f5; --text2:#a1a1aa; --text3:#52525b;
+    --green:#22c55e; --yellow:#eab308; --red:#ef4444;
+    /* Цвет полосы заголовка и рамки окна. Дублирует TITLEBAR_COLOR/
+       TITLEBAR_HEIGHT из main.js (там же красятся системные кнопки окна) —
+       меняешь здесь, меняй и там, иначе полоса и кнопки разъедутся по цвету. */
+    --tb:#8b5cf6; --tb-h:36px;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:"Cascadia Code","Consolas",monospace;
+    font-size:13px; overflow:hidden; user-select:none;
+    display:flex; flex-direction:column;
+    /* Обводка окна. Своя, а не системная: цвет системной рамки задаёт Windows
+       по акценту пользователя, и подменить его из Electron нельзя. */
+    border:1px solid var(--tb);
+  }
+
+  /* ── Полоса заголовка ──────────────────────
+     Системной полосы у окна нет (titleBarStyle:'hidden' в main.js), эта её
+     заменяет. Кнопки свернуть/развернуть/✕ рисует сам Windows поверх правого
+     края в том же цвете — своих кнопок здесь быть не должно. */
+  .titlebar{
+    flex:0 0 auto; height:var(--tb-h); background:var(--tb);
+    display:flex; align-items:center; overflow:hidden;
+  }
+  .tb-drag{
+    /* Тянуть окно можно только левее системных кнопок: titlebar-area-width —
+       ширина свободной части полосы, её сообщает Windows Controls Overlay.
+       Без этого ограничения перетаскивание перехватывало бы клики по ✕. */
+    width:env(titlebar-area-width, 100%); height:100%;
+    display:flex; align-items:center; gap:9px; padding-left:13px;
+    white-space:nowrap; overflow:hidden;
+    -webkit-app-region:drag;
+  }
+  .tb-title{color:#fff; font-size:11.5px; font-weight:bold; letter-spacing:.09em;}
+  .tb-sub{color:rgba(255,255,255,.72); font-size:10.5px; overflow:hidden; text-overflow:ellipsis;}
+  .tb-mark{
+    width:9px; height:9px; border-radius:3px; flex:0 0 auto;
+    background:rgba(255,255,255,.85);
+  }
+  input, button, textarea{font-family:inherit;}
+  #backend-down{
+    /* Не inset:0 — иначе оверлей ложится поверх полосы заголовка и окно
+       перестаёт таскаться ровно тогда, когда что-то сломалось. */
+    display:none; position:fixed; inset:var(--tb-h) 0 0 0; z-index:100; padding:28px 32px;
+    background:var(--bg); color:var(--text); overflow:auto;
+  }
+  #backend-down.show{display:block;}
+  #backend-down b{color:var(--red); font-size:15px;}
+  #backend-down-msg{margin:10px 0 16px; color:var(--text2); white-space:pre-wrap;}
+  #backend-down-log{
+    background:var(--bg2); border:1px solid var(--bg3); border-radius:6px;
+    padding:12px; color:var(--text2); font-size:12px; white-space:pre-wrap;
+    user-select:text;
+  }
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-track{background:var(--bg);}
+  ::-webkit-scrollbar-thumb{background:var(--bg3); border-radius:4px;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--accent);}
+
+  .app{display:flex; flex:1; min-height:0;}
+
+  /* ── Sidebar ───────────────────────────── */
+  .sidebar{
+    width:190px; flex:0 0 190px; background:var(--bg2);
+    border-right:1px solid var(--bg3);
+    display:flex; flex-direction:column; padding:16px 10px;
+  }
+  .brand{padding:6px 10px 18px;}
+  .brand .t{color:var(--accent); font-weight:bold; font-size:13px; letter-spacing:1px;}
+  .brand .s{color:var(--text3); font-size:10px; display:block; margin-top:2px;}
+  .nav-item{
+    display:flex; align-items:center; gap:8px;
+    background:transparent; border:none; color:var(--text2);
+    text-align:left; padding:9px 10px; border-radius:8px;
+    font-size:12.5px; cursor:pointer; margin-bottom:2px;
+  }
+  .nav-item:hover{background:var(--bg3); color:var(--text);}
+  .nav-item.active{background:var(--bg3); color:var(--accent2);}
+  .nav-item .badge{
+    margin-left:auto; background:var(--red); color:#fff; border-radius:8px;
+    font-size:9px; padding:1px 6px; display:none;
+  }
+  .nav-item .badge.show{display:inline-block;}
+  .sidebar-footer{margin-top:auto;}
+  .nav-item.danger:hover{background:rgba(239,68,68,.12); color:var(--red);}
+
+  /* ── Content ───────────────────────────── */
+  .content{flex:1; overflow-y:auto; padding:26px 32px;}
+  .tab{display:none;}
+  .tab.active{display:block;}
+  h1{font-size:15px; color:var(--accent); margin:0 0 4px; letter-spacing:.5px;}
+  .subtitle{color:var(--text3); font-size:11px; margin:0 0 20px;}
+  .card{
+    background:var(--bg2); border:1px solid var(--bg3); border-radius:12px;
+    padding:18px 20px; margin-bottom:16px;
+  }
+  .hr{height:1px; background:var(--bg3); margin:14px 0; border:none;}
+
+  /* Track card */
+  #track-title{font-size:15px; font-weight:bold; color:var(--text);}
+  #track-title.paused{color:var(--text2);}
+  #track-artist{color:var(--text2); font-size:12px; margin-top:2px;}
+  .progress-track{background:var(--bg3); height:5px; border-radius:3px; margin-top:12px; overflow:hidden;}
+  .progress-fill{background:var(--accent); height:100%; width:0%; transition:width .3s;}
+  .time-row{display:flex; justify-content:flex-end; color:var(--text3); font-size:10.5px; margin-top:5px;}
+
+  /* Status rows */
+  .status-row{display:flex; align-items:center; padding:6px 0;}
+  .status-row .dot{color:var(--text3); margin-right:8px; font-size:9px;}
+  .status-row .label{color:var(--text2); flex:1;}
+  .status-row .value{color:var(--text3); font-size:11.5px;}
+
+  .actions{display:flex; gap:18px; margin-top:6px;}
+  .link-btn{
+    background:none; border:none; color:var(--text2); cursor:pointer;
+    font-size:12px; padding:4px 0; font-family:inherit;
+  }
+  .link-btn:hover{color:var(--accent2);}
+  .link-btn.danger:hover{color:var(--red);}
+
+  /* Forms */
+  label.field-label{display:block; color:var(--text2); font-size:11.5px; margin:0 0 5px;}
+  .hint{color:var(--text3); font-size:10px; margin:4px 0 10px; line-height:1.4;}
+  .field{margin-bottom:14px;}
+  .input-row{display:flex; align-items:center; gap:6px;}
+  input[type=text], input[type=password], input[type=number]{
+    flex:1; background:var(--bg3); color:var(--text); border:1px solid var(--bg3);
+    border-radius:6px; padding:8px 10px; font-size:12px; outline:none; width:100%;
+  }
+  input:focus{border-color:var(--accent);}
+  .icon-btn{
+    background:none; border:none; color:var(--text3); cursor:pointer;
+    font-size:15px; padding:2px 4px;
+  }
+  .icon-btn:hover{color:var(--accent2);}
+  .checkbox-row{display:flex; align-items:center; gap:8px; margin-bottom:10px; cursor:pointer; color:var(--text2); font-size:12px;}
+  .checkbox-row input{accent-color:var(--accent); width:14px; height:14px; cursor:pointer;}
+  .radio-row{display:flex; align-items:center; gap:8px; margin-bottom:6px; cursor:pointer; color:var(--text2); font-size:12px;}
+  .radio-row input{accent-color:var(--accent); cursor:pointer;}
+  .section-title{color:var(--accent2); font-weight:bold; font-size:12px; margin:4px 0 6px;}
+  .copy-line{
+    background:var(--bg3); color:var(--accent2); border-radius:6px; padding:8px 10px;
+    font-size:11px; cursor:pointer; margin:4px 0 4px; word-break:break-all;
+  }
+  .copy-line:hover{background:var(--bg4);}
+  .sub-label{color:var(--text3); font-size:10px; margin:6px 0 3px;}
+
+  .save-bar{
+    position:sticky; bottom:-26px; margin:20px -32px -26px; padding:14px 32px;
+    background:var(--bg); border-top:1px solid var(--bg3);
+    display:flex; align-items:center; gap:14px;
+  }
+  .btn-primary{
+    background:var(--accent); color:#fff; border:none; border-radius:8px;
+    padding:9px 20px; font-size:12.5px; font-weight:bold; cursor:pointer;
+  }
+  .btn-primary:hover{background:var(--accent2);}
+  #save-status{color:var(--green); font-size:11px;}
+
+  /* Stats */
+  .stats-grid{display:flex; gap:14px; margin-bottom:16px;}
+  .stat-tile{flex:1; background:var(--bg2); border:1px solid var(--bg3); border-radius:12px; padding:16px;}
+  .stat-tile .num{font-size:22px; font-weight:bold; color:var(--accent2);}
+  .stat-tile .lbl{color:var(--text3); font-size:11px; margin-top:4px;}
+  .period-list{color:var(--text3); font-size:11px; line-height:1.7;}
+
+  /* Logs */
+  #logs-list{
+    background:var(--bg2); border:1px solid var(--bg3); border-radius:10px;
+    padding:12px 14px; font-size:11px; color:var(--text2); line-height:1.7;
+    max-height:calc(100vh - 220px - var(--tb-h)); overflow-y:auto; white-space:pre-wrap;
+  }
+  .log-line{border-bottom:1px solid var(--bg3); padding:4px 0;}
+  .log-line.error{color:var(--red, #ef4444);}
+  .log-ts{color:var(--text3); margin-right:8px;}
+  /* ── Расширения ─────────────────────────── */
+  .ext-card{
+    background:var(--bg2); border:1px solid var(--bg3); border-radius:12px;
+    padding:14px 16px; margin-bottom:12px;
+  }
+  .ext-head{display:flex; align-items:center; gap:8px; margin-bottom:3px;}
+  .ext-name{font-weight:bold; color:var(--text); font-size:12.5px;}
+  .ext-ver{color:var(--text3); font-size:10.5px;}
+  .ext-tag{
+    font-size:9px; letter-spacing:.06em; text-transform:uppercase;
+    padding:1px 7px; border-radius:999px; margin-left:auto;
+  }
+  .ext-tag.req{background:#3b2a5c; color:#c4b5fd;}
+  .ext-tag.opt{background:var(--bg3); color:var(--text3);}
+  .ext-tag.miss{background:#4a1520; color:#fca5a5;}
+  .ext-note{color:var(--text2); font-size:11px; line-height:1.45; margin-bottom:8px;}
+  .ext-path{
+    background:var(--bg3); color:var(--accent2); border-radius:6px;
+    padding:7px 9px; font-size:10.5px; word-break:break-all; margin-bottom:8px;
+    user-select:text;
+  }
+  .ext-actions{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .btn-mini{
+    background:var(--bg3); color:var(--text2); border:1px solid transparent;
+    border-radius:7px; padding:6px 11px; font-size:11px; cursor:pointer;
+    font-family:inherit;
+  }
+  .btn-mini:hover{background:var(--bg4); color:var(--text); border-color:var(--accent);}
+  .browser-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;}
+  .ext-warn{
+    background:rgba(234,179,8,.08); border:1px solid rgba(234,179,8,.25);
+    border-radius:10px; padding:12px 14px; margin-bottom:16px;
+    color:var(--text2); font-size:11px; line-height:1.5;
+  }
+  .ext-warn b{color:var(--yellow);}
+  .guide-cta{
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    background:var(--bg2); border:1px solid var(--accent); border-radius:12px;
+    padding:14px 16px; margin-bottom:14px;
+  }
+  .guide-txt{flex:1 1 260px; display:flex; flex-direction:column; gap:2px;}
+  .guide-txt b{color:var(--accent2); font-size:12.5px;}
+  .guide-txt span{color:var(--text2); font-size:11px; line-height:1.45;}
+  /* Вариантов больше сорока, поэтому сетка своя прокручиваемая область:
+     иначе вкладка настроек растягивается на несколько экранов, а всё, что под
+     иконками, становится недостижимым без долгой прокрутки. */
+  .icon-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr));
+             gap:8px; margin-top:4px; max-height:330px; overflow-y:auto;
+             padding:4px; background:var(--bg2); border-radius:8px;}
+  .icon-opt{
+    background:var(--bg3); border:2px solid transparent; border-radius:12px;
+    padding:10px 10px 8px; cursor:pointer; text-align:center; width:104px;
+    transition:border-color .15s, background .15s;
+  }
+  .icon-opt:hover{background:var(--bg4);}
+  .icon-opt.active{border-color:var(--accent); background:var(--bg4);}
+  .icon-opt img{width:56px; height:56px; display:block; margin:0 auto 5px;}
+  .icon-opt span{font-size:10px; color:var(--text2); line-height:1.3; display:block;}
+  .icon-opt.active span{color:var(--text);}
+  /* Значок рядом с названием: при двух источниках без него непонятно, чьё
+     именно название сейчас висит в Discord. */
+  #source-badge{
+    display:none; margin-left:8px; padding:1px 7px; border-radius:999px;
+    font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+    vertical-align:middle;
+  }
+  #source-badge.suno{display:inline-block; background:#3b2a5c; color:#c4b5fd;}
+  #source-badge.youtube{display:inline-block; background:#4a1520; color:#fca5a5;}
+  #source-badge.idle{display:inline-block; background:#27272a; color:#a1a1aa;}
+</style>
+</head>
+<body>
+<div class="titlebar">
+  <div class="tb-drag">
+    <span class="tb-mark"></span>
+    <span class="tb-title">SUNO RPC</span>
+    <span class="tb-sub">Discord Rich Presence</span>
+  </div>
+</div>
+
+<!-- Показывается, только если Python-бэкенд не поднялся или упал. Без неё
+     интерфейс выглядел бы полностью рабочим, просто с вечным «Ожидание трека». -->
+<div id="backend-down">
+  <b>Бэкенд не отвечает.</b>
+  <div id="backend-down-msg"></div>
+  <pre id="backend-down-log"></pre>
+</div>
+
+<div class="app">
+  <nav class="sidebar">
+    <div class="brand">
+      <div class="t">SUNO RPC</div>
+      <span class="s">Discord Rich Presence</span>
+    </div>
+    <button class="nav-item active" data-tab="main">🏠&nbsp; Главная</button>
+    <button class="nav-item" data-tab="settings">⚙&nbsp; Настройки</button>
+    <button class="nav-item" data-tab="youtube">▶&nbsp; YouTube</button>
+    <button class="nav-item" data-tab="idle">💤&nbsp; Ожидание</button>
+    <button class="nav-item" data-tab="extensions">🧩&nbsp; Расширения</button>
+    <button class="nav-item" data-tab="stats">📊&nbsp; Статистика</button>
+    <button class="nav-item" data-tab="logs" id="nav-logs">⚠&nbsp; Логи <span class="badge" id="logs-badge"></span></button>
+    <div class="sidebar-footer">
+      <button class="nav-item danger" id="btn-quit">⏻&nbsp; Выйти</button>
+    </div>
+  </nav>
+
+  <main class="content">
+
+    <!-- ══ ГЛАВНАЯ ══ -->
+    <section class="tab active" id="tab-main">
+      <h1>ТЕКУЩИЙ ТРЕК</h1>
+      <p class="subtitle">Статус подключений и воспроизведения</p>
+
+      <div class="card">
+        <div id="track-title">Ожидание трека...<span id="source-badge"></span></div>
+        <div id="track-artist">—</div>
+        <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+        <div class="time-row" id="track-time">0:00 / 0:00</div>
+      </div>
+
+      <div class="card">
+        <div class="status-row">
+          <span class="dot" id="dot-discord">●</span>
+          <span class="label">Discord</span>
+          <span class="value" id="text-discord">не подключён</span>
+        </div>
+        <div class="status-row">
+          <span class="dot" id="dot-ext">●</span>
+          <span class="label">Расширение</span>
+          <span class="value" id="text-ext">не подключено</span>
+        </div>
+        <div class="status-row">
+          <span class="dot" id="dot-bc">●</span>
+          <span class="label">Broadcast API</span>
+          <span class="value" id="text-bc">0 клиентов</span>
+        </div>
+        <div class="hr"></div>
+        <div class="actions">
+          <button class="link-btn" id="btn-reconnect">⟳&nbsp; Переподключить Discord</button>
+          <button class="link-btn danger" id="btn-disconnect">✗&nbsp; Отключить</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ НАСТРОЙКИ ══ -->
+    <section class="tab" id="tab-settings">
+      <h1>НАСТРОЙКИ</h1>
+      <p class="subtitle">Изменения применяются после сохранения</p>
+
+      <div class="card">
+        <div class="field">
+          <label class="field-label">Discord Client ID</label>
+          <div class="input-row">
+            <input type="password" id="f-client-id">
+            <button class="icon-btn" id="btn-eye" title="Показать/скрыть">👁</button>
+            <button class="icon-btn" id="btn-paste-id" title="Вставить">📋</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">WebSocket порт (для расширения)</label>
+          <input type="number" id="f-ws-port">
+        </div>
+        <div class="field">
+          <label class="field-label">Интервал обновления Discord (сек)</label>
+          <input type="number" id="f-update-interval">
+        </div>
+        <label class="checkbox-row"><input type="checkbox" id="f-show-elapsed"> Показывать прошедшее время</label>
+        <label class="checkbox-row"><input type="checkbox" id="f-app-icon-small"> Иконка приложения в маленьком кружке поверх обложки</label>
+        <label class="checkbox-row"><input type="checkbox" id="f-autostart"> Автоподключение Discord при старте</label>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Broadcast API</div>
+        <p class="hint">Другие приложения (оверлей, расширения) получают данные о треке в реальном времени.</p>
+        <label class="checkbox-row"><input type="checkbox" id="f-broadcast-enabled"> Включить Broadcast API</label>
+        <div class="sub-label">Порт (по умолчанию 6970)</div>
+        <input type="number" id="f-broadcast-port" style="margin-bottom:8px;">
+        <div class="copy-line" id="broadcast-addr" title="Нажми чтобы скопировать">ws://…</div>
+        <div class="hint" style="margin-top:0;">Нажми на строку выше, чтобы скопировать адрес</div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Иконка приложения</div>
+        <p class="hint">Применяется сразу — к трею, кнопке на панели задач и окну.</p>
+        <label class="checkbox-row" style="margin-bottom:8px;">
+          <input type="checkbox" id="icon-solid"> Сплошной угол
+        </label>
+        <div class="icon-grid" id="icon-grid"></div>
+        <p class="hint" style="margin-top:10px;">
+          Иконка самого файла программы в проводнике и у закреплённого ярлыка
+          остаётся прежней: она зашита в .exe при сборке и в работающем
+          приложении не меняется.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Окно и запуск</div>
+        <p class="hint">Применяются сразу — кнопка «Сохранить» ниже к ним не относится.</p>
+        <label class="checkbox-row"><input type="checkbox" id="w-autoLaunch"> Запускать вместе с Windows</label>
+        <p class="hint" id="w-autolaunch-hint">При запуске вместе с системой приложение всегда стартует свёрнутым в трей.</p>
+        <label class="checkbox-row"><input type="checkbox" id="w-startMinimized"> Стартовать свёрнутым в трей</label>
+        <label class="checkbox-row"><input type="checkbox" id="w-closeToTray"> Кнопка ✕ сворачивает в трей, а не закрывает приложение</label>
+        <label class="checkbox-row"><input type="checkbox" id="w-minimizeToTray"> Сворачивать в трей вместо панели задач</label>
+        <label class="checkbox-row"><input type="checkbox" id="w-alwaysOnTop"> Поверх всех окон</label>
+        <label class="checkbox-row"><input type="checkbox" id="w-traySingleClick"> Открывать окно одним кликом по значку в трее</label>
+        <label class="checkbox-row" style="margin-bottom:2px;"><input type="checkbox" id="w-rememberBounds"> Запоминать размер и положение окна</label>
+        <p class="hint">Если ✕ закрывает приложение, свернуть его в трей можно кнопкой «Свернуть» — при включённой настройке выше.</p>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Тип активности Discord</div>
+        <label class="radio-row"><input type="radio" name="activity-type" value="playing" id="f-activity-playing"> 🎮 Играет (поддерживает кнопки)</label>
+        <label class="radio-row"><input type="radio" name="activity-type" value="listening" id="f-activity-listening"> 🎵 Слушает (без кнопок)</label>
+        <p class="hint">При выборе «Слушает» кнопки не отображаются — ограничение Discord.</p>
+        <div class="sub-label">Название в шапке активности</div>
+        <input type="text" id="f-app-name" placeholder="оставь пустым — будет имя Discord-приложения">
+        <p class="hint">Первая строка в Discord — это «Слушает …» плюс это название.</p>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Кнопки в активности Discord</div>
+
+        <div class="sub-label" style="color:var(--text3); font-weight:bold;">КНОПКА 1</div>
+        <label class="checkbox-row"><input type="checkbox" id="f-btn1-enabled"> Включить</label>
+        <div class="sub-label">Название</div>
+        <input type="text" id="f-btn1-label" style="margin-bottom:8px;">
+        <label class="checkbox-row"><input type="checkbox" id="f-btn1-auto-url"> Авто: ссылка на текущий трек</label>
+        <div class="sub-label">URL (если авто выключено)</div>
+        <div class="input-row" style="margin-bottom:10px;">
+          <input type="text" id="f-btn1-url">
+          <button class="icon-btn" id="btn-paste-btn1-url" title="Вставить">📋</button>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="sub-label" style="color:var(--text3); font-weight:bold;">КНОПКА 2</div>
+        <label class="checkbox-row"><input type="checkbox" id="f-btn2-enabled"> Включить</label>
+        <div class="sub-label">Название</div>
+        <input type="text" id="f-btn2-label" style="margin-bottom:8px;">
+        <div class="sub-label">URL</div>
+        <div class="input-row">
+          <input type="text" id="f-btn2-url">
+          <button class="icon-btn" id="btn-paste-btn2-url" title="Вставить">📋</button>
+        </div>
+        <p class="hint">Пустой URL — кнопка не отображается.</p>
+      </div>
+
+      <div class="save-bar">
+        <button class="btn-primary" id="btn-save">✔ Сохранить</button>
+        <span id="save-status"></span>
+      </div>
+    </section>
+
+    <!-- ══ YOUTUBE ══ -->
+    <section class="tab" id="tab-youtube">
+      <h1>YOUTUBE</h1>
+      <p class="subtitle">Активность, когда музыка в Suno не играет</p>
+
+      <div class="card">
+        <label class="checkbox-row"><input type="checkbox" id="f-yt-enabled"> Показывать видео в Discord</label>
+        <p class="hint">
+          Музыка всегда в приоритете: пока в Suno идёт воспроизведение, видео не показывается.
+          Как только Suno встаёт на паузу или закрывается — статус берёт YouTube.
+          Нужно установить расширение из папки <b>youtube-extension</b>.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Тип активности Discord</div>
+        <label class="radio-row"><input type="radio" name="yt-activity-type" value="watching" id="f-yt-act-watching"> 📺 Смотрит (поддерживает кнопки)</label>
+        <label class="radio-row"><input type="radio" name="yt-activity-type" value="playing" id="f-yt-act-playing"> 🎮 Играет (поддерживает кнопки)</label>
+        <label class="radio-row"><input type="radio" name="yt-activity-type" value="listening" id="f-yt-act-listening"> 🎵 Слушает (без кнопок)</label>
+        <p class="hint">Задаётся отдельно от Suno — музыка может оставаться «Слушает», а видео «Смотрит».</p>
+        <div class="sub-label">Название в шапке активности</div>
+        <input type="text" id="f-yt-app-name" placeholder="YouTube">
+        <p class="hint">Без него в шапке стояло бы имя Discord-приложения — «Смотрит Suno AI» под роликом с YouTube.</p>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Кнопки под видео</div>
+
+        <div class="sub-label" style="color:var(--text3); font-weight:bold;">КНОПКА 1</div>
+        <label class="checkbox-row"><input type="checkbox" id="f-yt-btn1-enabled"> Включить</label>
+        <div class="sub-label">Название</div>
+        <input type="text" id="f-yt-btn1-label" style="margin-bottom:8px;">
+        <label class="checkbox-row"><input type="checkbox" id="f-yt-btn1-auto-url"> Авто: ссылка на текущее видео</label>
+        <div class="sub-label">URL (если авто выключено)</div>
+        <div class="input-row" style="margin-bottom:10px;">
+          <input type="text" id="f-yt-btn1-url">
+          <button class="icon-btn" id="btn-paste-yt-btn1-url" title="Вставить">📋</button>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="sub-label" style="color:var(--text3); font-weight:bold;">КНОПКА 2</div>
+        <label class="checkbox-row"><input type="checkbox" id="f-yt-btn2-enabled"> Включить</label>
+        <div class="sub-label">Название</div>
+        <input type="text" id="f-yt-btn2-label" style="margin-bottom:8px;">
+        <div class="sub-label">URL</div>
+        <div class="input-row">
+          <input type="text" id="f-yt-btn2-url">
+          <button class="icon-btn" id="btn-paste-yt-btn2-url" title="Вставить">📋</button>
+        </div>
+        <p class="hint">Пустой URL — кнопка не отображается.</p>
+      </div>
+
+      <div class="save-bar">
+        <button class="btn-primary" id="btn-save-yt">✔ Сохранить</button>
+        <span id="save-status-yt"></span>
+      </div>
+    </section>
+
+    <!-- ══ ОЖИДАНИЕ ══ -->
+    <section class="tab" id="tab-idle">
+      <h1>ОЖИДАНИЕ</h1>
+      <p class="subtitle">Что показывать в Discord, когда не играет ни Suno, ни YouTube</p>
+
+      <div class="card">
+        <label class="checkbox-row"><input type="checkbox" id="f-idle-enabled"> Показывать шаблон</label>
+        <p class="hint">
+          Если выключить — активность просто снимается. Без шаблона и без снятия
+          в Discord навсегда висел бы последний трек, доигравший полчаса назад.
+        </p>
+        <div class="sub-label">Через сколько секунд без воспроизведения</div>
+        <input type="number" id="f-idle-after" min="0" max="3600">
+        <p class="hint">
+          Отсчёт идёт от паузы, а не от закрытия вкладки: расширение продолжает
+          слать данные, пока вкладка открыта. 0 — переключаться сразу по паузе.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Поля активности</div>
+
+        <div class="sub-label">Название в шапке</div>
+        <input type="text" id="f-idle-app-name" placeholder="пусто — будет имя Discord-приложения" style="margin-bottom:10px;">
+
+        <div class="sub-label">Первая строка</div>
+        <input type="text" id="f-idle-details" style="margin-bottom:10px;">
+
+        <div class="sub-label">Вторая строка</div>
+        <input type="text" id="f-idle-state" style="margin-bottom:10px;">
+
+        <div class="sub-label">Подпись под маленьким значком</div>
+        <input type="text" id="f-idle-small-text" style="margin-bottom:10px;">
+
+        <label class="checkbox-row"><input type="checkbox" id="f-idle-show-timer"> Считать время простоя</label>
+
+        <p class="hint" style="margin-top:10px;">
+          В любое поле можно подставить: <b>{tracks}</b> — треков за месяц,
+          <b>{hours}</b> — время прослушивания за месяц,
+          <b>{last_track}</b> и <b>{last_artist}</b> — что играло последним.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Тип активности Discord</div>
+        <label class="radio-row"><input type="radio" name="idle-activity-type" value="playing" id="f-idle-act-playing"> 🎮 Играет (поддерживает кнопки)</label>
+        <label class="radio-row"><input type="radio" name="idle-activity-type" value="watching" id="f-idle-act-watching"> 📺 Смотрит (поддерживает кнопки)</label>
+        <label class="radio-row"><input type="radio" name="idle-activity-type" value="listening" id="f-idle-act-listening"> 🎵 Слушает (без кнопок)</label>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Картинка</div>
+        <p class="hint">
+          Discord скачивает картинку сам, поэтому файл с твоего диска сюда не
+          подходит. Годится прямая ссылка на изображение либо ключ ассета из
+          Discord Developer Portal → твоё приложение → Rich Presence → Art Assets.
+        </p>
+        <label class="checkbox-row"><input type="checkbox" id="f-idle-use-app-icon"> Показывать иконку приложения — ту, что выбрана во вкладке «Настройки»</label>
+        <div class="input-row" style="margin-bottom:10px;">
+          <input type="text" id="f-idle-large-image" placeholder="https://… или ключ ассета">
+          <button class="icon-btn" id="btn-paste-idle-image" title="Вставить">📋</button>
+        </div>
+        <div class="sub-label">Подпись при наведении на картинку</div>
+        <input type="text" id="f-idle-large-text">
+      </div>
+
+      <div class="card">
+        <div class="section-title">Кнопки</div>
+
+        <div class="sub-label" style="color:var(--text3); font-weight:bold;">КНОПКА 1</div>
+        <label class="checkbox-row"><input type="checkbox" id="f-idle-btn1-enabled"> Включить</label>
+        <div class="sub-label">Название</div>
+        <input type="text" id="f-idle-btn1-label" style="margin-bottom:8px;">
+        <div class="sub-label">URL</div>
+        <div class="input-row" style="margin-bottom:10px;">
+          <input type="text" id="f-idle-btn1-url">
+          <button class="icon-btn" id="btn-paste-idle-btn1-url" title="Вставить">📋</button>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="sub-label" style="color:var(--text3); font-weight:bold;">КНОПКА 2</div>
+        <label class="checkbox-row"><input type="checkbox" id="f-idle-btn2-enabled"> Включить</label>
+        <div class="sub-label">Название</div>
+        <input type="text" id="f-idle-btn2-label" style="margin-bottom:8px;">
+        <div class="sub-label">URL</div>
+        <div class="input-row">
+          <input type="text" id="f-idle-btn2-url">
+          <button class="icon-btn" id="btn-paste-idle-btn2-url" title="Вставить">📋</button>
+        </div>
+      </div>
+
+      <div class="save-bar">
+        <button class="btn-primary" id="btn-save-idle">✔ Сохранить</button>
+        <span id="save-status-idle"></span>
+      </div>
+    </section>
+
+    <!-- ══ РАСШИРЕНИЯ ══ -->
+    <section class="tab" id="tab-extensions">
+      <h1>РАСШИРЕНИЯ БРАУЗЕРА</h1>
+      <p class="subtitle">Уже лежат на диске — скачивать ничего не нужно</p>
+
+      <div class="guide-cta">
+        <div class="guide-txt">
+          <b>Не знаешь, что делать дальше?</b>
+          <span>Пошаговая инструкция: куда нажимать в браузере, что означают ошибки
+            и почему Firefox — отдельная история.</span>
+        </div>
+        <button class="btn-primary" id="btn-guide">📖 Открыть инструкцию</button>
+      </div>
+
+      <div class="ext-warn">
+        <b>Почему не ставится само.</b> Chromium-браузеры с 2018 года блокируют
+        установку расширений мимо магазина — раньше так распространялись рекламные
+        и шпионские расширения, и лазейку закрыли для всех. Firefox не загружает
+        неподписанные дополнения вовсе. Поэтому папки распакованы заранее, а
+        последние два клика придётся сделать руками.
+      </div>
+
+      <div id="ext-list"></div>
+
+      <div class="card">
+        <div class="section-title">Открыть страницу расширений</div>
+        <p class="hint">Дальше: «Режим разработчика» → «Загрузить распакованное
+          расширение» → вставить путь, скопированный кнопкой выше.</p>
+        <div class="browser-row" id="browser-row"></div>
+      </div>
+    </section>
+
+    <!-- ══ СТАТИСТИКА ══ -->
+    <section class="tab" id="tab-stats">
+      <h1>СТАТИСТИКА</h1>
+      <p class="subtitle">Текущий месяц</p>
+
+      <div class="stats-grid">
+        <div class="stat-tile"><div class="num" id="stats-count">0</div><div class="lbl">треков прослушано</div></div>
+        <div class="stat-tile"><div class="num" id="stats-time">0м</div><div class="lbl">суммарное время</div></div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Подробный отчёт</div>
+        <p class="hint">Открывает отдельное окно с полной статистикой по месяцам и годам — графики, топ треков.</p>
+        <button class="btn-primary" id="btn-open-stats">📊 Открыть подробный отчёт</button>
+        <div id="stats-periods" class="period-list" style="margin-top:14px;"></div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">YouTube</div>
+        <div class="stats-grid">
+          <div class="stat-tile"><div class="num" id="yt-stats-count">0</div><div class="lbl">видео просмотрено</div></div>
+          <div class="stat-tile"><div class="num" id="yt-stats-time">0м</div><div class="lbl">суммарное время</div></div>
+        </div>
+        <p class="hint">
+          Просмотры считаются отдельно от музыки и не смешиваются с ней в общем топе.
+          Отчёт открывается в том же окне — переключаться между страницами можно кнопкой в его шапке.
+        </p>
+        <button class="btn-primary" id="btn-open-yt-stats">▶ Открыть отчёт по YouTube</button>
+        <div id="yt-stats-periods" class="period-list" style="margin-top:14px;"></div>
+      </div>
+    </section>
+
+    <!-- ══ ЛОГИ ══ -->
+    <section class="tab" id="tab-logs">
+      <h1>ЛОГИ</h1>
+      <p class="subtitle">Ошибки и события приложения</p>
+
+      <div class="actions" style="margin-bottom:12px;">
+        <button class="link-btn" id="btn-copy-logs">⧉&nbsp; Копировать всё</button>
+        <button class="link-btn" id="btn-refresh-logs">⟳&nbsp; Обновить</button>
+      </div>
+      <div id="logs-list">Загрузка…</div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+let api = null;
+let currentTab = "main";
+let settingsLoaded = false;
+let iconsLoaded = false;
+let windowSettingsLoaded = false;
+let lastErrorCount = 0;
+
+function fmtTime(sec){
+  sec = Math.max(0, Math.floor(sec || 0));
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return m + ":" + String(s).padStart(2, "0");
+}
+
+// ── Навигация по вкладкам ────────────────────────────
+document.querySelectorAll(".nav-item[data-tab]").forEach(btn => {
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+});
+
+function switchTab(tab){
+  currentTab = tab;
+  document.querySelectorAll(".nav-item[data-tab]").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll(".tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + tab));
+  if ((tab === "settings" || tab === "youtube" || tab === "idle") && !settingsLoaded) loadSettings();
+  if (tab === "settings" && !iconsLoaded) { iconsLoaded = true; loadIcons(); }
+  if (tab === "settings" && !windowSettingsLoaded) { windowSettingsLoaded = true; loadWindowSettings(); }
+  if (tab === "extensions") loadExtensions();
+  if (tab === "stats") loadStats();
+  if (tab === "logs") { loadLogs(); document.getElementById("logs-badge").classList.remove("show"); }
+}
+
+// ── Главная: отрисовка состояния ─────────────────────
+// Состояние не опрашивается отсюда: его раз в секунду тянет главный процесс
+// Electron (ему всё равно нужен опрос для иконки трея, которая обновляется и
+// при скрытом окне) и присылает сюда через api.onState.
+function renderState(s){
+  if (!s) return;
+  try {
+    const titleEl = document.getElementById("track-title");
+    const badge = document.getElementById("source-badge");
+    // Значок пересоздаётся здесь, потому что textContent на строке ниже
+    // затирает всё содержимое элемента вместе с ним.
+    titleEl.textContent = s.title;
+    titleEl.appendChild(badge);
+    badge.textContent = {youtube: "YouTube", suno: "Suno", idle: "Ожидание"}[s.source] || "";
+    badge.className = s.source || "";
+    titleEl.classList.toggle("paused", s.is_paused);
+    document.getElementById("track-artist").textContent = s.artist;
+
+    const pct = s.duration > 0 ? Math.min(s.elapsed / s.duration, 1.0) : 0;
+    document.getElementById("progress-fill").style.width = (pct * 100) + "%";
+    document.getElementById("track-time").textContent = fmtTime(s.elapsed) + " / " + fmtTime(s.duration);
+
+    setStatus("discord", s.discord, s.discord ? "подключён" : "не подключён", s.discord ? "var(--green)" : "var(--text3)");
+    setStatus("ext", s.extension, s.extension ? "активно" : "не подключено", s.extension ? "var(--accent2)" : "var(--text3)");
+
+    const bcDot = document.getElementById("dot-bc"), bcText = document.getElementById("text-bc");
+    if (!s.broadcast_enabled) {
+      bcDot.style.color = "var(--text3)"; bcText.textContent = "выключен"; bcText.style.color = "var(--text3)";
+    } else if (s.broadcast_count > 0) {
+      const n = s.broadcast_count;
+      const sfx = n >= 5 ? "ов" : (n >= 2 ? "а" : "");
+      bcDot.style.color = "var(--green)"; bcText.textContent = n + " клиент" + sfx; bcText.style.color = "var(--green)";
+    } else {
+      bcDot.style.color = "var(--yellow)"; bcText.textContent = "ожидание..."; bcText.style.color = "var(--yellow)";
+    }
+
+    if (s.error_count > lastErrorCount) {
+      document.getElementById("logs-badge").classList.add("show");
+      document.getElementById("logs-badge").textContent = s.error_count;
+      if (currentTab === "logs") loadLogs();
+    }
+    lastErrorCount = s.error_count;
+  } catch(e) { /* разметка ещё не готова */ }
+}
+
+function setStatus(prefix, active, text, color){
+  document.getElementById("dot-" + prefix).style.color = color;
+  const t = document.getElementById("text-" + prefix);
+  t.textContent = text; t.style.color = color;
+}
+
+document.getElementById("btn-reconnect").addEventListener("click", () => api.reconnect_discord());
+document.getElementById("btn-disconnect").addEventListener("click", () => api.disconnect_discord());
+document.getElementById("btn-quit").addEventListener("click", () => api.quit_app());
+
+// ── Настройки ─────────────────────────────────────────
+async function loadSettings(){
+  const c = await api.get_config();
+  settingsLoaded = true;
+
+  document.getElementById("f-client-id").value = c.discord_client_id;
+  document.getElementById("f-ws-port").value = c.websocket_port;
+  document.getElementById("f-update-interval").value = c.update_interval;
+  document.getElementById("f-show-elapsed").checked = c.show_elapsed;
+  document.getElementById("f-app-icon-small").checked = c.app_icon_small;
+  document.getElementById("f-autostart").checked = c.autostart_discord;
+
+  document.getElementById("f-broadcast-enabled").checked = c.broadcast_enabled;
+  document.getElementById("f-broadcast-port").value = c.broadcast_port;
+  updateBroadcastAddr(c.local_ip, c.broadcast_port);
+
+  document.getElementById("f-activity-playing").checked = c.activity_type === "playing";
+  document.getElementById("f-activity-listening").checked = c.activity_type === "listening";
+  document.getElementById("f-app-name").value = c.app_name || "";
+
+  document.getElementById("f-btn1-enabled").checked = c.btn1_enabled;
+  document.getElementById("f-btn1-label").value = c.btn1_label;
+  document.getElementById("f-btn1-auto-url").checked = c.btn1_auto_url;
+  document.getElementById("f-btn1-url").value = c.btn1_url;
+  document.getElementById("f-btn1-url").disabled = c.btn1_auto_url;
+
+  document.getElementById("f-btn2-enabled").checked = c.btn2_enabled;
+  document.getElementById("f-btn2-label").value = c.btn2_label;
+  document.getElementById("f-btn2-url").value = c.btn2_url;
+
+  // ── YouTube ──
+  document.getElementById("f-yt-enabled").checked = c.youtube_enabled;
+  const ytAct = c.youtube_activity_type || "watching";
+  document.getElementById("f-yt-act-watching").checked  = ytAct === "watching";
+  document.getElementById("f-yt-act-playing").checked   = ytAct === "playing";
+  document.getElementById("f-yt-act-listening").checked = ytAct === "listening";
+  document.getElementById("f-yt-app-name").value = c.youtube_app_name || "";
+
+  document.getElementById("f-yt-btn1-enabled").checked  = c.yt_btn1_enabled;
+  document.getElementById("f-yt-btn1-label").value      = c.yt_btn1_label;
+  document.getElementById("f-yt-btn1-auto-url").checked = c.yt_btn1_auto_url;
+  document.getElementById("f-yt-btn1-url").value        = c.yt_btn1_url;
+  document.getElementById("f-yt-btn1-url").disabled     = c.yt_btn1_auto_url;
+
+  document.getElementById("f-yt-btn2-enabled").checked = c.yt_btn2_enabled;
+  document.getElementById("f-yt-btn2-label").value     = c.yt_btn2_label;
+  document.getElementById("f-yt-btn2-url").value       = c.yt_btn2_url;
+
+  // ── Ожидание ──
+  document.getElementById("f-idle-enabled").checked    = c.idle_enabled;
+  document.getElementById("f-idle-after").value       = c.idle_after_seconds;
+  document.getElementById("f-idle-app-name").value     = c.idle_app_name || "";
+  document.getElementById("f-idle-details").value      = c.idle_details || "";
+  document.getElementById("f-idle-state").value        = c.idle_state || "";
+  document.getElementById("f-idle-small-text").value   = c.idle_small_text || "";
+  document.getElementById("f-idle-show-timer").checked = c.idle_show_timer;
+  document.getElementById("f-idle-large-image").value  = c.idle_large_image || "";
+  document.getElementById("f-idle-use-app-icon").checked = c.idle_use_app_icon;
+  syncIdleImageField();
+  document.getElementById("f-idle-large-text").value   = c.idle_large_text || "";
+
+  const idleAct = c.idle_activity_type || "playing";
+  document.getElementById("f-idle-act-playing").checked   = idleAct === "playing";
+  document.getElementById("f-idle-act-watching").checked  = idleAct === "watching";
+  document.getElementById("f-idle-act-listening").checked = idleAct === "listening";
+
+  document.getElementById("f-idle-btn1-enabled").checked = c.idle_btn1_enabled;
+  document.getElementById("f-idle-btn1-label").value     = c.idle_btn1_label || "";
+  document.getElementById("f-idle-btn1-url").value       = c.idle_btn1_url || "";
+  document.getElementById("f-idle-btn2-enabled").checked = c.idle_btn2_enabled;
+  document.getElementById("f-idle-btn2-label").value     = c.idle_btn2_label || "";
+  document.getElementById("f-idle-btn2-url").value       = c.idle_btn2_url || "";
+}
+
+document.getElementById("f-yt-btn1-auto-url").addEventListener("change", (e) => {
+  document.getElementById("f-yt-btn1-url").disabled = e.target.checked;
+});
+
+function updateBroadcastAddr(ip, port){
+  document.getElementById("broadcast-addr").dataset.addr = "ws://" + ip + ":" + port;
+  document.getElementById("broadcast-addr").textContent = "ws://" + ip + ":" + port;
+}
+document.getElementById("f-broadcast-port").addEventListener("input", (e) => {
+  const ip = document.getElementById("broadcast-addr").dataset.addr.split("://")[1].split(":")[0];
+  updateBroadcastAddr(ip, e.target.value || "6970");
+});
+
+document.getElementById("btn-eye").addEventListener("click", () => {
+  const inp = document.getElementById("f-client-id");
+  const btn = document.getElementById("btn-eye");
+  if (inp.type === "password") { inp.type = "text"; btn.textContent = "🙈"; }
+  else { inp.type = "password"; btn.textContent = "👁"; }
+});
+
+document.getElementById("f-btn1-auto-url").addEventListener("change", (e) => {
+  document.getElementById("f-btn1-url").disabled = e.target.checked;
+});
+
+function bindPaste(btnId, inputId){
+  document.getElementById(btnId).addEventListener("click", async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      document.getElementById(inputId).value = text.trim();
+    } catch(e) {}
+  });
+}
+bindPaste("btn-paste-id", "f-client-id");
+bindPaste("btn-paste-btn1-url", "f-btn1-url");
+bindPaste("btn-paste-btn2-url", "f-btn2-url");
+bindPaste("btn-paste-yt-btn1-url", "f-yt-btn1-url");
+bindPaste("btn-paste-yt-btn2-url", "f-yt-btn2-url");
+// Пока галочка стоит, поле картинки ни на что не влияет — показываем это
+// явно, иначе лежащий в нём с давних пор ключ ассета выглядит как активная
+// настройка, которая почему-то не работает.
+function syncIdleImageField(){
+  const on = document.getElementById("f-idle-use-app-icon").checked;
+  const field = document.getElementById("f-idle-large-image");
+  field.disabled = on;
+  field.style.opacity = on ? 0.45 : 1;
+}
+document.getElementById("f-idle-use-app-icon").addEventListener("change", syncIdleImageField);
+
+bindPaste("btn-paste-idle-image", "f-idle-large-image");
+bindPaste("btn-paste-idle-btn1-url", "f-idle-btn1-url");
+bindPaste("btn-paste-idle-btn2-url", "f-idle-btn2-url");
+
+document.getElementById("broadcast-addr").addEventListener("click", async (e) => {
+  const addr = e.target.dataset.addr;
+  try { await navigator.clipboard.writeText(addr); } catch(err) {}
+  e.target.textContent = "✔ Скопировано!";
+  setTimeout(() => { e.target.textContent = addr; }, 1500);
+});
+
+// Настройки Suno и YouTube лежат в одном конфиге и сохраняются одним вызовом:
+// save_config на бэкенде переписывает конфиг целиком, поэтому отправлять только
+// половину полей нельзя — вторая половина затёрлась бы значениями по умолчанию.
+// Поэтому обе кнопки «Сохранить» собирают один и тот же полный payload.
+function collectConfig(){
+  const ytAct = document.getElementById("f-yt-act-watching").checked ? "watching"
+              : (document.getElementById("f-yt-act-playing").checked ? "playing" : "listening");
+  return {
+    discord_client_id: document.getElementById("f-client-id").value.trim(),
+    websocket_port: document.getElementById("f-ws-port").value,
+    update_interval: document.getElementById("f-update-interval").value,
+    show_elapsed: document.getElementById("f-show-elapsed").checked,
+    app_icon_small: document.getElementById("f-app-icon-small").checked,
+    autostart_discord: document.getElementById("f-autostart").checked,
+    broadcast_enabled: document.getElementById("f-broadcast-enabled").checked,
+    broadcast_port: document.getElementById("f-broadcast-port").value,
+    activity_type: document.getElementById("f-activity-playing").checked ? "playing" : "listening",
+    app_name: document.getElementById("f-app-name").value.trim(),
+    btn1_enabled: document.getElementById("f-btn1-enabled").checked,
+    btn1_label: document.getElementById("f-btn1-label").value.trim(),
+    btn1_auto_url: document.getElementById("f-btn1-auto-url").checked,
+    btn1_url: document.getElementById("f-btn1-url").value.trim(),
+    btn2_enabled: document.getElementById("f-btn2-enabled").checked,
+    btn2_label: document.getElementById("f-btn2-label").value.trim(),
+    btn2_url: document.getElementById("f-btn2-url").value.trim(),
+
+    youtube_enabled: document.getElementById("f-yt-enabled").checked,
+    youtube_activity_type: ytAct,
+    youtube_app_name: document.getElementById("f-yt-app-name").value.trim(),
+    yt_btn1_enabled: document.getElementById("f-yt-btn1-enabled").checked,
+    yt_btn1_label: document.getElementById("f-yt-btn1-label").value.trim(),
+    yt_btn1_auto_url: document.getElementById("f-yt-btn1-auto-url").checked,
+    yt_btn1_url: document.getElementById("f-yt-btn1-url").value.trim(),
+    yt_btn2_enabled: document.getElementById("f-yt-btn2-enabled").checked,
+    yt_btn2_label: document.getElementById("f-yt-btn2-label").value.trim(),
+    yt_btn2_url: document.getElementById("f-yt-btn2-url").value.trim(),
+
+    idle_enabled: document.getElementById("f-idle-enabled").checked,
+    idle_after_seconds: document.getElementById("f-idle-after").value,
+    idle_activity_type: document.getElementById("f-idle-act-playing").checked ? "playing"
+                      : (document.getElementById("f-idle-act-watching").checked ? "watching" : "listening"),
+    idle_app_name: document.getElementById("f-idle-app-name").value.trim(),
+    idle_details: document.getElementById("f-idle-details").value.trim(),
+    idle_state: document.getElementById("f-idle-state").value.trim(),
+    idle_small_text: document.getElementById("f-idle-small-text").value.trim(),
+    idle_show_timer: document.getElementById("f-idle-show-timer").checked,
+    idle_large_image: document.getElementById("f-idle-large-image").value.trim(),
+    idle_use_app_icon: document.getElementById("f-idle-use-app-icon").checked,
+    idle_large_text: document.getElementById("f-idle-large-text").value.trim(),
+    idle_btn1_enabled: document.getElementById("f-idle-btn1-enabled").checked,
+    idle_btn1_label: document.getElementById("f-idle-btn1-label").value.trim(),
+    idle_btn1_url: document.getElementById("f-idle-btn1-url").value.trim(),
+    idle_btn2_enabled: document.getElementById("f-idle-btn2-enabled").checked,
+    idle_btn2_label: document.getElementById("f-idle-btn2-label").value.trim(),
+    idle_btn2_url: document.getElementById("f-idle-btn2-url").value.trim(),
+  };
+}
+
+async function saveConfig(statusId){
+  await api.save_config(collectConfig());
+  const st = document.getElementById(statusId);
+  st.textContent = "✔ Сохранено!";
+  setTimeout(() => { st.textContent = ""; }, 3000);
+}
+
+document.getElementById("btn-save").addEventListener("click", () => saveConfig("save-status"));
+document.getElementById("btn-save-yt").addEventListener("click", () => saveConfig("save-status-yt"));
+document.getElementById("btn-save-idle").addEventListener("click", () => saveConfig("save-status-idle"));
+
+// ── Иконка приложения ─────────────────────────────────
+// Живёт отдельно от остальных настроек: сохраняется у Electron и применяется
+// сразу по клику, поэтому кнопка «Сохранить» ей не нужна.
+// Каждый образ существует в двух вариантах — обычном и «-solid» (залитый
+// правый нижний угол). Показывать их сорока с лишним отдельными плитками
+// бессмысленно: половина сетки была бы визуальными дублями соседа. Поэтому
+// плитка одна на образ, а угол выбирается общим переключателем.
+const iconBase  = (id) => id.replace(/-solid$/, "");
+const iconSolid = (id) => id.endsWith("-solid");
+
+async function loadIcons(){
+  const info = await api.get_icon_settings();
+  const grid = document.getElementById("icon-grid");
+  const solidBox = document.getElementById("icon-solid");
+
+  // Образы в порядке из main.js; подпись берём у обычного варианта, чтобы в
+  // плитке не висело «(сплошной угол)» при включённом переключателе.
+  const bases = [];
+  for (const v of info.variants){
+    const base = iconBase(v.id);
+    if (!bases.some(b => b.base === base)){
+      bases.push({ base, label: v.label.replace(/ \(сплошной угол\)$/, ""),
+                   hasSolid: false });
+    }
+    if (iconSolid(v.id)) bases.find(b => b.base === base).hasSolid = true;
+  }
+
+  let current = info.current;
+  solidBox.checked = iconSolid(current);
+
+  const idFor = (b) => (solidBox.checked && b.hasSolid) ? `${b.base}-solid` : b.base;
+
+  const render = () => {
+    grid.innerHTML = "";
+    for (const b of bases){
+      const id = idFor(b);
+      const el = document.createElement("div");
+      el.className = "icon-opt" + (id === current ? " active" : "");
+      el.innerHTML = `<img src="icons/variants/${id}-preview.png" alt=""><span>${b.label}</span>`;
+      el.addEventListener("click", async () => {
+        if (!(await api.set_icon_variant(id))) return;
+        current = id;
+        grid.querySelectorAll(".icon-opt").forEach(n => n.classList.remove("active"));
+        el.classList.add("active");
+      });
+      grid.appendChild(el);
+    }
+  };
+
+  solidBox.addEventListener("change", async () => {
+    // Переключатель не просто перерисовывает превью: выбранная иконка обязана
+    // сменить угол сразу, иначе галочка стоит, а в трее прежний вариант.
+    const b = bases.find(x => x.base === iconBase(current));
+    if (b){
+      const id = idFor(b);
+      if (id !== current && await api.set_icon_variant(id)) current = id;
+    }
+    render();
+  });
+
+  render();
+}
+
+// ── Окно и запуск ─────────────────────────────────────
+// Эти настройки хранит Electron (desktop/src/main.js, ui-settings.json), а не
+// бэкенд, поэтому и загружаются, и применяются они мимо get_config/save_config —
+// каждый переключатель уходит в главный процесс сразу при клике.
+const WINDOW_SETTING_KEYS = [
+  "autoLaunch", "startMinimized", "closeToTray", "minimizeToTray",
+  "alwaysOnTop", "traySingleClick", "rememberBounds",
+];
+
+async function loadWindowSettings(){
+  const w = await api.get_window_settings();
+  for (const key of WINDOW_SETTING_KEYS){
+    const el = document.getElementById("w-" + key);
+    if (!el) continue;
+    el.checked = !!w[key];
+    el.addEventListener("change", async () => {
+      const res = await api.set_window_setting(key, el.checked);
+      // Главный процесс мог не применить настройку (например, автозапуск в
+      // режиме разработки) — возвращаем переключатель к реальному состоянию.
+      if (res && res.ok === false) el.checked = !el.checked;
+      if (key === "autoLaunch" && res && typeof res.autoLaunchActive === "boolean" && w.autoLaunchSupported){
+        el.checked = res.autoLaunchActive;
+      }
+    });
+  }
+  if (!w.autoLaunchSupported){
+    document.getElementById("w-autolaunch-hint").textContent =
+      "В режиме разработки автозапуск не регистрируется в системе — флажок только запоминается " +
+      "и начнёт работать в собранном приложении.";
+  }
+}
+
+// ── Расширения ────────────────────────────────────────
+// Список приходит из главного процесса: только он знает, куда установщик
+// положил папки (resources рядом с бэкендом) и какие браузеры стоят в системе.
+async function loadExtensions(){
+  const info = await api.get_extensions();
+  const list = document.getElementById("ext-list");
+  list.innerHTML = "";
+
+  for (const ext of info.items){
+    const card = document.createElement("div");
+    card.className = "ext-card";
+
+    const tag = !ext.present
+      ? '<span class="ext-tag miss">не найдено</span>'
+      : (ext.required ? '<span class="ext-tag req">обязательное</span>'
+                      : '<span class="ext-tag opt">по желанию</span>');
+
+    card.innerHTML =
+      '<div class="ext-head">' +
+        '<span class="ext-name"></span>' +
+        '<span class="ext-ver"></span>' + tag +
+      '</div>' +
+      '<div class="ext-note"></div>' +
+      '<div class="ext-path"></div>' +
+      '<div class="ext-actions"></div>';
+
+    // textContent, а не шаблон в innerHTML: названия и пути приходят с диска,
+    // и путь с кавычкой или угловой скобкой сломал бы разметку.
+    card.querySelector(".ext-name").textContent = ext.title;
+    card.querySelector(".ext-ver").textContent = ext.version ? "v" + ext.version : "";
+    card.querySelector(".ext-note").textContent = ext.present
+      ? ext.note
+      : ext.note + " Папка не найдена — приложение запущено из исходников без сборки расширений (npm run extensions).";
+    card.querySelector(".ext-path").textContent = ext.dir;
+
+    const actions = card.querySelector(".ext-actions");
+    if (ext.present){
+      const copy = document.createElement("button");
+      copy.className = "btn-mini";
+      copy.textContent = "📋 Скопировать путь";
+      copy.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(ext.dir);
+          copy.textContent = "✔ Скопировано";
+          setTimeout(() => { copy.textContent = "📋 Скопировать путь"; }, 1500);
+        } catch(e) { copy.textContent = "не вышло скопировать"; }
+      });
+      actions.appendChild(copy);
+
+      const open = document.createElement("button");
+      open.className = "btn-mini";
+      open.textContent = "📂 Открыть папку";
+      open.addEventListener("click", () => api.open_extensions_folder(ext.dir));
+      actions.appendChild(open);
+
+      if (!ext.firefox){
+        const note = document.createElement("span");
+        note.className = "hint";
+        note.style.margin = "0";
+        note.textContent = "В Firefox не работает: нужны offscreen и tabCapture, которых там нет.";
+        actions.appendChild(note);
+      }
+    }
+    list.appendChild(card);
+  }
+
+  const row = document.getElementById("browser-row");
+  row.innerHTML = "";
+  if (info.browsers.length === 0){
+    row.innerHTML = '<span class="hint" style="margin:0;">Ни один поддерживаемый браузер не найден.</span>';
+    return;
+  }
+  for (const b of info.browsers){
+    const btn = document.createElement("button");
+    btn.className = "btn-mini";
+    btn.textContent = b.title;
+    // Firefox открывает about:debugging — там принимается только manifest.json
+    // или подписанный .xpi, и загруженное исчезает при перезапуске браузера.
+    btn.title = b.firefoxOnly
+      ? "about:debugging — временная загрузка, до перезапуска Firefox"
+      : "Страница расширений браузера";
+    btn.addEventListener("click", () => api.open_browser_extensions(b.id));
+    row.appendChild(btn);
+  }
+}
+
+// ── Статистика ────────────────────────────────────────
+async function loadStats(){
+  const s = await api.get_stats_summary();
+  document.getElementById("stats-count").textContent = s.count;
+  document.getElementById("stats-time").textContent = s.time_str;
+  const el = document.getElementById("stats-periods");
+  if (!s.available) {
+    el.textContent = "Модуль статистики недоступен.";
+  } else if (s.months.length === 0 && s.years.length === 0) {
+    el.textContent = "Пока нет завершённых периодов — отчёт появится после окончания месяца.";
+  } else {
+    el.textContent = "Доступные периоды: " + [...s.years, ...s.months].join(", ");
+  }
+
+  const yt = s.youtube || {available:false, count:0, time_str:"0м", months:[], years:[]};
+  document.getElementById("yt-stats-count").textContent = yt.count;
+  document.getElementById("yt-stats-time").textContent = yt.time_str;
+  const ytEl = document.getElementById("yt-stats-periods");
+  if (!yt.available) {
+    ytEl.textContent = "Модуль статистики YouTube недоступен.";
+  } else if (yt.months.length === 0 && yt.years.length === 0) {
+    ytEl.textContent = "Пока нет завершённых периодов — отчёт появится после окончания месяца.";
+  } else {
+    ytEl.textContent = "Доступные периоды: " + [...yt.years, ...yt.months].join(", ");
+  }
+}
+document.getElementById("btn-guide").addEventListener("click", () => api.open_guide());
+document.getElementById("btn-open-stats").addEventListener("click", () => api.open_stats_window("suno"));
+document.getElementById("btn-open-yt-stats").addEventListener("click", () => api.open_stats_window("youtube"));
+
+// ── Логи ──────────────────────────────────────────────
+async function loadLogs(){
+  const logs = await api.get_logs();
+  const el = document.getElementById("logs-list");
+  if (logs.length === 0) {
+    el.textContent = "Пока нет записей.";
+    return;
+  }
+  el.innerHTML = logs.map(l =>
+    `<div class="log-line${l.level === "error" ? " error" : ""}"><span class="log-ts">[${l.time}]</span>${escapeHtml(l.msg)}</div>`
+  ).join("");
+  el.scrollTop = el.scrollHeight;
+}
+function escapeHtml(s){
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+document.getElementById("btn-refresh-logs").addEventListener("click", loadLogs);
+document.getElementById("btn-copy-logs").addEventListener("click", async () => {
+  const logs = await api.get_logs();
+  const text = logs.map(l => `[${l.time}] ${l.msg}`).join("\n") || "Логи пусты.";
+  try { await navigator.clipboard.writeText(text); } catch(e) {}
+});
+
+// ── Инициализация ─────────────────────────────────────
+// Мост отдаёт preload.js (desktop/src/preload.js) синхронно, до выполнения
+// этого скрипта, поэтому ждать отдельного события готовности не нужно —
+// в pywebview для этого приходилось слушать "pywebviewready".
+api = window.sunoApi;   // см. комментарий про имя моста в preload.js
+
+api.onState(renderState);
+api.get_state().then(renderState).catch(() => {});
+
+api.onBackendDown((info) => {
+  document.getElementById("backend-down").classList.add("show");
+  document.getElementById("backend-down-msg").textContent = info.hint || "";
+  document.getElementById("backend-down-log").textContent = (info.log || []).join("\n");
+});
+</script>
+</body>
+</html>

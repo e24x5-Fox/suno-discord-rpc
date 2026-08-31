@@ -38,6 +38,9 @@ _BASE_DIR          = _data_dir() if _IS_EXE else _dev_dir()
 STATS_FILE         = os.path.join(_data_dir() if _IS_EXE else _dev_dir(), "suno_stats.json")         # ПК
 STATS_MOBILE_FILE  = os.path.join(_data_dir() if _IS_EXE else _dev_dir(), "suno_stats_mobile.json")  # телефон
 HTML_FILE          = os.path.join(_temp_dir() if _IS_EXE else _dev_dir(), "suno_stats.html")          # HTML-отчёт (temp)
+# Отчёт по YouTube — отдельная страница РЯДОМ с этой, чтобы кнопка-переключатель
+# в шапке была обычной относительной ссылкой и работала внутри одного окна.
+YT_HTML_FILE       = os.path.join(_temp_dir() if _IS_EXE else _dev_dir(), "youtube_stats.html")
 
 # ─── Порог для засчёта "прослушивания" ───────────────────────────────────────
 # Трек считается прослушанным если elapsed ≥ этого процента длительности
@@ -524,6 +527,19 @@ def _top_tracks(month_data: dict, n: int) -> list:
     return tracks[:n]
 
 
+def nav_button(href: str, label: str) -> str:
+    """Кнопка перехода на соседнюю страницу отчёта (Suno ⇄ YouTube).
+
+    Обе страницы лежат в одной папке и открываются в одном и том же окне
+    Electron, поэтому достаточно относительной ссылки — никакого IPC не нужно.
+    Без data-i18n намеренно: переключатель языка иначе затирал бы подпись.
+    """
+    return (f'<a id="btn-page-nav" href="{href}">'
+            f'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+            f'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">'
+            f'<polyline points="9 18 15 12 9 6"/></svg>{label}</a>')
+
+
 def generate_html():
     """Генерирует полный HTML-отчёт из текущих данных stats.json + mobile."""
     data        = _load()
@@ -569,9 +585,15 @@ def generate_html():
     year_sections_html = _build_year_sections(closed_years, data, mobile_data)
     current_html       = _build_current_section(cur_month_key, cur_month_data, cur_month_mobile)
 
+    # Кнопку на страницу YouTube показываем, только если та страница уже
+    # существует — иначе ссылка вела бы в никуда у тех, кто ютуб-расширение
+    # не ставил.
+    nav_html = nav_button("youtube_stats.html", "YouTube") if os.path.exists(YT_HTML_FILE) else ""
+
     html = _HTML_TEMPLATE.replace("{{MONTH_TABS}}", month_tabs_html) \
                          .replace("{{YEAR_SECTIONS}}", year_sections_html) \
                          .replace("{{CURRENT_SECTION}}", current_html) \
+                         .replace("{{NAV}}", nav_html) \
                          .replace("{{GENERATED_AT}}", datetime.datetime.now().strftime("%d.%m.%Y %H:%M"))
 
     with open(HTML_FILE, "w", encoding="utf-8") as f:
@@ -1526,7 +1548,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .lang-sep { color: var(--text3); font-size: 0.6rem; opacity: 0.4; user-select:none; }
 
   /* ── HTML download button ── */
-  #btn-save-html {
+  #btn-save-html, #btn-page-nav {
     position: fixed; top: 18px; left: 20px; z-index: 990;
     display: flex; align-items: center; gap: 7px;
     background: rgba(13,13,24,0.85);
@@ -1547,7 +1569,15 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     color: #fff;
     box-shadow: 0 4px 24px rgba(255,107,0,0.25);
   }
-  #btn-save-html svg { flex-shrink:0; }
+  #btn-save-html svg, #btn-page-nav svg { flex-shrink:0; }
+  /* Кнопка-переключатель встаёт правее кнопки сохранения. Обе страницы отчёта
+     используют один и тот же шаблон, поэтому позиция задана здесь один раз. */
+  #btn-page-nav { left: 118px; }
+  #btn-page-nav:hover {
+    border-color: rgba(255,45,120,0.7);
+    color: #fff;
+    box-shadow: 0 4px 24px rgba(255,45,120,0.25);
+  }
 </style>
 </head>
 <body>
@@ -1562,6 +1592,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   </svg>
   HTML
 </a>
+
+{{NAV}}
 
 <div id="lang-switcher">
   <button class="lang-btn active" onclick="setLang('ru')">RU</button>
