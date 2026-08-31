@@ -37,6 +37,9 @@ for _s in (sys.stdout, sys.stderr):
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC_DIR = os.path.join(ROOT, "desktop", "src", "icons", "source")
 OUT_DIR = os.path.join(ROOT, "desktop", "src", "icons", "variants")
+# Картинки для Discord: он тянет их по ссылке из репозитория, в установщике им
+# делать нечего (package.json исключает эту папку так же, как source).
+DISC_DIR = os.path.join(ROOT, "desktop", "src", "icons", "discord")
 
 # Имя файла обязано совпадать со слагом: из слага собирается публичная ссылка
 # на картинку для Discord (app_icon_url в suno_rpc.py), а Discord скачивает её
@@ -95,6 +98,15 @@ VARIANTS = [
     ("smirk-solid", "smirk-solid.png", "Прищур (сплошной угол)"),
 ]
 
+# Кружок рядом с обложкой Discord обрезает картинку РОВНО по вписанной
+# окружности, поэтому углы квадратной плашки срезаются первыми — вместе с тем
+# самым уголком, ради которого у каждой иконки есть два варианта. В круг
+# вписывается квадрат со стороной d/√2 ≈ 0.707d, так что иконку для кружка
+# уменьшаем до 70% и центрируем на прозрачном холсте: тогда в круг попадает
+# вся плашка целиком, с углом и обводкой.
+CIRCLE_SCALE = 0.70
+CIRCLE_SIZE = 512
+
 WINDOW_SIZES = [16, 24, 32, 48, 64, 128, 256]
 TRAY_SIZES = [16, 20, 24, 32]
 PREVIEW_SIZE = 96
@@ -125,6 +137,16 @@ def with_status_dot(img: Image.Image, color) -> Image.Image:
     return im
 
 
+def fit_for_circle(img: Image.Image) -> Image.Image:
+    """Уменьшает иконку так, чтобы круглая обрезка Discord её не срезала."""
+    im = img.convert("RGBA").resize((CIRCLE_SIZE, CIRCLE_SIZE), Image.LANCZOS)
+    side = int(CIRCLE_SIZE * CIRCLE_SCALE)
+    inner = im.resize((side, side), Image.LANCZOS)
+    out = Image.new("RGBA", (CIRCLE_SIZE, CIRCLE_SIZE), (0, 0, 0, 0))
+    out.alpha_composite(inner, ((CIRCLE_SIZE - side) // 2,) * 2)
+    return out
+
+
 def save_ico(img: Image.Image, path: str, sizes):
     # Каждый размер масштабируем отдельно с LANCZOS: если отдать Pillow один
     # большой кадр и список размеров, мелкие 16–24px получаются заметно грязнее.
@@ -139,6 +161,7 @@ def main():
         print(f"[ОШИБКА] нет папки с исходниками: {SRC_DIR}")
         return 1
     os.makedirs(OUT_DIR, exist_ok=True)
+    os.makedirs(DISC_DIR, exist_ok=True)
 
     made = 0
     for slug, filename, label in VARIANTS:
@@ -154,6 +177,7 @@ def main():
                      os.path.join(OUT_DIR, f"{slug}-tray-{state}.ico"), TRAY_SIZES)
         img.resize((PREVIEW_SIZE, PREVIEW_SIZE), Image.LANCZOS).save(
             os.path.join(OUT_DIR, f"{slug}-preview.png"))
+        fit_for_circle(img).save(os.path.join(DISC_DIR, f"{slug}-circle.png"))
 
         print(f"  {slug:11} «{label}»  ← {filename}")
         made += 1

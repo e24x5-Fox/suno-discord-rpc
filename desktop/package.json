@@ -24,7 +24,8 @@
     },
     "files": [
       "src/**/*",
-      "!src/icons/source/**"
+      "!src/icons/source/**",
+      "!src/icons/discord/**"
     ],
     "extraResources": [
       {

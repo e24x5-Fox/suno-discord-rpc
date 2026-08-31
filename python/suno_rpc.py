@@ -180,7 +180,7 @@ BROADCAST_PORT    = 6970
 # Ветка, а не тег: ссылка должна оставаться рабочей и после добавления новых
 # иконок, без правки конфигов у тех, кто уже поставил приложение.
 ICON_ASSET_BASE = ("https://raw.githubusercontent.com/e24x5-Fox/suno-discord-rpc/"
-                   "desktop-app/desktop/src/icons/source/")
+                   "desktop-app/desktop/src/icons/")
 
 cfg["settings"] = {
     "discord_client_id": DISCORD_CLIENT_ID,
@@ -261,8 +261,14 @@ cfg["buttons_youtube"] = {
     "btn2_url":      "",
 }
 
-def app_icon_url() -> str:
+def app_icon_url(circle: bool = False) -> str:
     """Ссылка на картинку выбранной иконки приложения для Discord.
+
+    circle=True — версия для маленького кружка рядом с обложкой. Он обрезает
+    картинку ровно по вписанной окружности, срезая углы квадратной плашки, а
+    вместе с ними и уголок, ради которого у каждой иконки два варианта. В
+    icons/discord/ лежит та же иконка, уменьшенная так, чтобы целиком попасть
+    в круг (build-icons.py, fit_for_circle).
 
     Пустая строка означает «иконки нет» — вызывающий должен молча обойтись без
     неё, а не подставлять заглушку: неверная ссылка в large_image/small_image
@@ -274,7 +280,9 @@ def app_icon_url() -> str:
         return ""
     if not base.endswith("/"):
         base += "/"
-    return f"{base}{variant}.png"
+    if circle:
+        return f"{base}discord/{variant}-circle.png"
+    return f"{base}source/{variant}.png"
 
 
 def load_config():
@@ -945,7 +953,7 @@ async def update_presence(data: dict, source: str = "suno"):
         # его ТОЛЬКО когда задан small_image: одного small_text для этого мало,
         # и до появления этой строки подпись «Suno AI» никуда не попадала.
         if cfg["settings"].get("app_icon_small", "true").lower() == "true":
-            icon = app_icon_url()
+            icon = app_icon_url(circle=True)
             if icon:
                 kwargs["small_image"] = icon
         if name_override:
