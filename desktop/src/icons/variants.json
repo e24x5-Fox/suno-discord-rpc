@@ -1,0 +1,471 @@
+[
+  {
+    "id": "play",
+    "base": "play",
+    "shape": "corner",
+    "label": "Плеер",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "play-solid",
+    "base": "play",
+    "shape": "square",
+    "label": "Плеер",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "fox",
+    "base": "fox",
+    "shape": "corner",
+    "label": "Бойкиссер",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "fox-solid",
+    "base": "fox",
+    "shape": "square",
+    "label": "Бойкиссер",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "stand",
+    "base": "stand",
+    "shape": "corner",
+    "label": "Во весь рост",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "stand-solid",
+    "base": "stand",
+    "shape": "square",
+    "label": "Во весь рост",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "stand-round",
+    "base": "stand",
+    "shape": "round",
+    "label": "Во весь рост",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "glee",
+    "base": "glee",
+    "shape": "corner",
+    "label": "Интересное радостное чувство",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "glee-solid",
+    "base": "glee",
+    "shape": "square",
+    "label": "Интересное радостное чувство",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "glee-round",
+    "base": "glee",
+    "shape": "round",
+    "label": "Интересное радостное чувство",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "cute-wow",
+    "base": "cute-wow",
+    "shape": "corner",
+    "label": "Милое удивление",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "cute-wow-solid",
+    "base": "cute-wow",
+    "shape": "square",
+    "label": "Милое удивление",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "cute-wow-round",
+    "base": "cute-wow",
+    "shape": "round",
+    "label": "Милое удивление",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "huh",
+    "base": "huh",
+    "shape": "corner",
+    "label": "Не понял",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "huh-solid",
+    "base": "huh",
+    "shape": "square",
+    "label": "Не понял",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "huh-round",
+    "base": "huh",
+    "shape": "round",
+    "label": "Не понял",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "sulk",
+    "base": "sulk",
+    "shape": "corner",
+    "label": "Обида",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "sulk-solid",
+    "base": "sulk",
+    "shape": "square",
+    "label": "Обида",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "sulk-round",
+    "base": "sulk",
+    "shape": "round",
+    "label": "Обида",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "sad",
+    "base": "sad",
+    "shape": "corner",
+    "label": "Огорчение",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "sad-solid",
+    "base": "sad",
+    "shape": "square",
+    "label": "Огорчение",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "sad-round",
+    "base": "sad",
+    "shape": "round",
+    "label": "Огорчение",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "sprawl",
+    "base": "sprawl",
+    "shape": "corner",
+    "label": "Ожидание (развалился)",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "sprawl-solid",
+    "base": "sprawl",
+    "shape": "square",
+    "label": "Ожидание (развалился)",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "sprawl-round",
+    "base": "sprawl",
+    "shape": "round",
+    "label": "Ожидание (развалился)",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "wait",
+    "base": "wait",
+    "shape": "corner",
+    "label": "Ожидание",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "wait-solid",
+    "base": "wait",
+    "shape": "square",
+    "label": "Ожидание",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "wait-round",
+    "base": "wait",
+    "shape": "round",
+    "label": "Ожидание",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "chonk",
+    "base": "chonk",
+    "shape": "corner",
+    "label": "Просто толстая кость",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "chonk-solid",
+    "base": "chonk",
+    "shape": "square",
+    "label": "Просто толстая кость",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "chonk-round",
+    "base": "chonk",
+    "shape": "round",
+    "label": "Просто толстая кость",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "shy",
+    "base": "shy",
+    "shape": "corner",
+    "label": "Смущение",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "shy-solid",
+    "base": "shy",
+    "shape": "square",
+    "label": "Смущение",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "shy-round",
+    "base": "shy",
+    "shape": "round",
+    "label": "Смущение",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "shame",
+    "base": "shame",
+    "shape": "corner",
+    "label": "Стыдно",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "shame-solid",
+    "base": "shame",
+    "shape": "square",
+    "label": "Стыдно",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "shame-round",
+    "base": "shame",
+    "shape": "round",
+    "label": "Стыдно",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "starfish",
+    "base": "starfish",
+    "shape": "corner",
+    "label": "Счастье (звёздочкой)",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "starfish-solid",
+    "base": "starfish",
+    "shape": "square",
+    "label": "Счастье (звёздочкой)",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "starfish-round",
+    "base": "starfish",
+    "shape": "round",
+    "label": "Счастье (звёздочкой)",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "joy",
+    "base": "joy",
+    "shape": "corner",
+    "label": "Счастье",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "joy-solid",
+    "base": "joy",
+    "shape": "square",
+    "label": "Счастье",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "joy-round",
+    "base": "joy",
+    "shape": "round",
+    "label": "Счастье",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "wow",
+    "base": "wow",
+    "shape": "corner",
+    "label": "Удивление",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "wow-solid",
+    "base": "wow",
+    "shape": "square",
+    "label": "Удивление",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "wow-round",
+    "base": "wow",
+    "shape": "round",
+    "label": "Удивление",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "aww",
+    "base": "aww",
+    "shape": "corner",
+    "label": "Умиление",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "aww-solid",
+    "base": "aww",
+    "shape": "square",
+    "label": "Умиление",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "aww-round",
+    "base": "aww",
+    "shape": "round",
+    "label": "Умиление",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "aww-2",
+    "base": "aww-2",
+    "shape": "corner",
+    "label": "Умиление 2",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "aww-2-solid",
+    "base": "aww-2",
+    "shape": "square",
+    "label": "Умиление 2",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "aww-2-round",
+    "base": "aww-2",
+    "shape": "round",
+    "label": "Умиление 2",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "aww-3",
+    "base": "aww-3",
+    "shape": "corner",
+    "label": "Умиление 3",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "aww-3-solid",
+    "base": "aww-3",
+    "shape": "square",
+    "label": "Умиление 3",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "aww-3-round",
+    "base": "aww-3",
+    "shape": "round",
+    "label": "Умиление 3",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "aww-4",
+    "base": "aww-4",
+    "shape": "corner",
+    "label": "Умиление 4",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "aww-4-solid",
+    "base": "aww-4",
+    "shape": "square",
+    "label": "Умиление 4",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "aww-4-round",
+    "base": "aww-4",
+    "shape": "round",
+    "label": "Умиление 4",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "calm",
+    "base": "calm",
+    "shape": "corner",
+    "label": "Умиротворение",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "calm-solid",
+    "base": "calm",
+    "shape": "square",
+    "label": "Умиротворение",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "calm-round",
+    "base": "calm",
+    "shape": "round",
+    "label": "Умиротворение",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "tired",
+    "base": "tired",
+    "shape": "corner",
+    "label": "Усталость",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "tired-solid",
+    "base": "tired",
+    "shape": "square",
+    "label": "Усталость",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "tired-round",
+    "base": "tired",
+    "shape": "round",
+    "label": "Усталость",
+    "shapeLabel": "круг"
+  },
+  {
+    "id": "smirk",
+    "base": "smirk",
+    "shape": "corner",
+    "label": "Прищур",
+    "shapeLabel": "с уголком"
+  },
+  {
+    "id": "smirk-solid",
+    "base": "smirk",
+    "shape": "square",
+    "label": "Прищур",
+    "shapeLabel": "сплошной угол"
+  },
+  {
+    "id": "smirk-round",
+    "base": "smirk",
+    "shape": "round",
+    "label": "Прищур",
+    "shapeLabel": "круг"
+  }
+]

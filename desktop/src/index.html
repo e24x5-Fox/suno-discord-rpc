@@ -246,6 +246,27 @@
   .icon-opt img{width:56px; height:56px; display:block; margin:0 auto 5px;}
   .icon-opt span{font-size:10px; color:var(--text2); line-height:1.3; display:block;}
   .icon-opt.active span{color:var(--text);}
+  /* Форма плашки общая для всех образов, поэтому она отдельным переключателем
+     над сеткой, а не третьим вариантом каждой плитки. */
+  .shape-row{display:flex; gap:6px; margin-bottom:10px;}
+  .shape-btn{
+    background:var(--bg3); color:var(--text2); border:1px solid transparent;
+    border-radius:8px; padding:6px 12px; font-size:11px; cursor:pointer;
+    font-family:inherit;
+  }
+  .shape-btn:hover{background:var(--bg4); color:var(--text);}
+  .shape-btn.active{background:var(--bg4); color:var(--text); border-color:var(--accent);}
+  .row-between{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  /* Крестик удаления — только у своих иконок: готовые удалять нечего и незачем,
+     они лежат внутри установленного приложения. */
+  .icon-opt{position:relative;}
+  .icon-del{
+    position:absolute; top:3px; right:3px; width:18px; height:18px; line-height:16px;
+    border-radius:50%; border:none; padding:0; cursor:pointer; font-size:11px;
+    background:var(--bg2); color:var(--text3); display:none;
+  }
+  .icon-opt:hover .icon-del{display:block;}
+  .icon-del:hover{background:var(--red); color:#fff;}
   /* Значок рядом с названием: при двух источниках без него непонятно, чьё
      именно название сейчас висит в Discord. */
   #source-badge{
@@ -371,10 +392,12 @@
       <div class="card">
         <div class="section-title">Иконка приложения</div>
         <p class="hint">Применяется сразу — к трею, кнопке на панели задач и окну.</p>
-        <label class="checkbox-row" style="margin-bottom:8px;">
-          <input type="checkbox" id="icon-solid"> Сплошной угол
-        </label>
+        <div class="shape-row" id="icon-shapes"></div>
         <div class="icon-grid" id="icon-grid"></div>
+        <div class="row-between" style="margin-top:10px;">
+          <button class="btn-mini" id="btn-icon-editor">✏️ Сделать свою иконку</button>
+          <span class="hint" style="margin:0;">Своя картинка на той же плашке</span>
+        </div>
         <p class="hint" style="margin-top:10px;">
           Иконка самого файла программы в проводнике и у закреплённого ярлыка
           остаётся прежней: она зашита в .exe при сборке и в работающем
@@ -967,65 +990,93 @@ document.getElementById("btn-save-idle").addEventListener("click", () => saveCon
 // ── Иконка приложения ─────────────────────────────────
 // Живёт отдельно от остальных настроек: сохраняется у Electron и применяется
 // сразу по клику, поэтому кнопка «Сохранить» ей не нужна.
-// Каждый образ существует в двух вариантах — обычном и «-solid» (залитый
-// правый нижний угол). Показывать их сорока с лишним отдельными плитками
-// бессмысленно: половина сетки была бы визуальными дублями соседа. Поэтому
-// плитка одна на образ, а угол выбирается общим переключателем.
-const iconBase  = (id) => id.replace(/-solid$/, "");
-const iconSolid = (id) => id.endsWith("-solid");
+// Каждый образ существует в трёх формах плашки — с вырезанным уголком, со
+// сплошным углом и круглой. Показывать их семью десятками отдельных плиток
+// бессмысленно: две трети сетки были бы визуальными дублями соседа. Поэтому
+// плитка одна на образ, а форма выбирается общим переключателем над сеткой.
+//
+// Список приходит из icons/variants.json (его пишет build-icons.py): у каждой
+// записи есть base — образ, shape — форма, label — подпись образа. Ничего
+// разбирать из имени файла не нужно, и форм может стать больше без правок здесь.
+const SHAPE_LABELS = { corner: "С уголком", square: "Квадрат", round: "Круг" };
 
 async function loadIcons(){
   const info = await api.get_icon_settings();
   const grid = document.getElementById("icon-grid");
-  const solidBox = document.getElementById("icon-solid");
+  const shapeRow = document.getElementById("icon-shapes");
 
-  // Образы в порядке из main.js; подпись берём у обычного варианта, чтобы в
-  // плитке не висело «(сплошной угол)» при включённом переключателе.
+  // Образы в порядке из main.js, у каждого — какие формы для него собрались.
   const bases = [];
   for (const v of info.variants){
-    const base = iconBase(v.id);
-    if (!bases.some(b => b.base === base)){
-      bases.push({ base, label: v.label.replace(/ \(сплошной угол\)$/, ""),
-                   hasSolid: false });
-    }
-    if (iconSolid(v.id)) bases.find(b => b.base === base).hasSolid = true;
+    let b = bases.find(x => x.base === v.base);
+    if (!b) bases.push(b = { base: v.base, label: v.label, shapes: {} });
+    b.shapes[v.shape] = v.id;
   }
+  const shapes = ["corner", "square", "round"]
+    .filter(s => bases.some(b => b.shapes[s]));
 
   let current = info.current;
-  solidBox.checked = iconSolid(current);
+  let shape = (info.variants.find(v => v.id === current) || {}).shape || shapes[0];
 
-  const idFor = (b) => (solidBox.checked && b.hasSolid) ? `${b.base}-solid` : b.base;
+  // У старых образов круглого варианта нет — для них показываем ближайший
+  // существующий, иначе плитка осталась бы с битой картинкой.
+  const idFor = (b) => b.shapes[shape] || b.shapes.corner || Object.values(b.shapes)[0];
 
   const render = () => {
+    shapeRow.innerHTML = "";
+    for (const s of shapes){
+      const btn = document.createElement("button");
+      btn.className = "shape-btn" + (s === shape ? " active" : "");
+      btn.textContent = SHAPE_LABELS[s] || s;
+      btn.addEventListener("click", async () => {
+        shape = s;
+        // Переключатель не просто перерисовывает превью: выбранная иконка
+        // обязана сменить форму сразу, иначе кнопка нажата, а в трее прежняя.
+        const b = bases.find(x => Object.values(x.shapes).includes(current));
+        if (b){
+          const id = idFor(b);
+          if (id !== current && await api.set_icon_variant(id)) current = id;
+        }
+        render();
+      });
+      shapeRow.appendChild(btn);
+    }
+
     grid.innerHTML = "";
     for (const b of bases){
       const id = idFor(b);
+      const v = info.variants.find(x => x.id === id) || {};
       const el = document.createElement("div");
       el.className = "icon-opt" + (id === current ? " active" : "");
-      el.innerHTML = `<img src="icons/variants/${id}-preview.png" alt=""><span>${b.label}</span>`;
+      // Превью готовых иконок лежит рядом со страницей, у своих — в userData,
+      // и главный процесс присылает для них готовый file://-адрес.
+      const src = v.preview || `icons/variants/${id}-preview.png`;
+      el.innerHTML = `<img src="${src}" alt=""><span>${b.label}</span>`;
       el.addEventListener("click", async () => {
         if (!(await api.set_icon_variant(id))) return;
         current = id;
         grid.querySelectorAll(".icon-opt").forEach(n => n.classList.remove("active"));
         el.classList.add("active");
       });
+      if (v.custom){
+        const del = document.createElement("button");
+        del.className = "icon-del";
+        del.textContent = "✕";
+        del.title = "Удалить эту иконку";
+        del.addEventListener("click", async (e) => {
+          e.stopPropagation();       // иначе клик заодно выберет удаляемую иконку
+          await api.delete_custom_icon(id);
+          loadIcons();
+        });
+        el.appendChild(del);
+      }
       grid.appendChild(el);
     }
   };
 
-  solidBox.addEventListener("change", async () => {
-    // Переключатель не просто перерисовывает превью: выбранная иконка обязана
-    // сменить угол сразу, иначе галочка стоит, а в трее прежний вариант.
-    const b = bases.find(x => x.base === iconBase(current));
-    if (b){
-      const id = idFor(b);
-      if (id !== current && await api.set_icon_variant(id)) current = id;
-    }
-    render();
-  });
-
   render();
 }
+
 
 // ── Окно и запуск ─────────────────────────────────────
 // Эти настройки хранит Electron (desktop/src/main.js, ui-settings.json), а не
@@ -1206,6 +1257,14 @@ api = window.sunoApi;   // см. комментарий про имя моста
 
 api.onState(renderState);
 api.get_state().then(renderState).catch(() => {});
+
+document.getElementById("btn-icon-editor")
+  .addEventListener("click", () => api.open_icon_editor());
+
+// Редактор сохранил или удалил иконку — сетка в настройках должна показать это
+// сама, без переоткрытия вкладки. Слушатель вешаем здесь, а не рядом с
+// loadIcons: там `api` ещё null, и вся остальная часть скрипта не выполнялась бы.
+api.onIconsChanged(() => { if (iconsLoaded) loadIcons(); });
 
 api.onBackendDown((info) => {
   document.getElementById("backend-down").classList.add("show");

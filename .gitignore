@@ -22,7 +22,7 @@ python/suno_rpc.cfg
 # Скриншоты и разовые архивы, не относящиеся к исходникам
 python/2.png
 python/suno_stats.png
-python/build_log.txt
+build_log.txt
 python/files (1).zip
 
 # Неиспользуемый дублирующий модуль (логика уже встроена в suno_rpc.py)

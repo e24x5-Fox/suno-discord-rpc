@@ -42,6 +42,17 @@ contextBridge.exposeInMainWorld('sunoApi', {
   get_icon_settings:  ()        => ipcRenderer.invoke('get_icon_settings'),
   set_icon_variant:   (id)      => ipcRenderer.invoke('set_icon_variant', id),
 
+  // Редактор иконки: страница собирает картинку на canvas и отдаёт её сюда
+  // готовым PNG (data:image/png;base64). Файлы кладёт главный процесс — в
+  // userData, куда рендереру доступа нет.
+  open_icon_editor:   ()        => ipcRenderer.invoke('open_icon_editor'),
+  save_custom_icon:   (payload) => ipcRenderer.invoke('save_custom_icon', payload),
+  delete_custom_icon: (id)      => ipcRenderer.invoke('delete_custom_icon', id),
+
+  // Набор иконок изменился (добавили свою или удалили) — настройкам надо
+  // перерисовать сетку, даже если сама страница ничего не нажимала.
+  onIconsChanged: (cb) => ipcRenderer.on('icons-changed', () => cb()),
+
   // Состояние приходит пушем: опрос бэкенда идёт в главном процессе (он нужен
   // там для иконки трея, которая обновляется и при скрытом окне), поэтому
   // рендереру незачем опрашивать второй раз.

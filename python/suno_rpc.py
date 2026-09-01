@@ -204,6 +204,12 @@ cfg["settings"] = {
     # /api/set_icon_variant и хранится, чтобы после перезапуска бэкенда картинка
     # была верной ещё до того, как интерфейс успеет о ней сообщить.
     "icon_variant":      "play",
+    # Вариант для маленького кружка поверх обложки. Кружок обрезает картинку по
+    # окружности, поэтому у круглой плашки там преимущество: она вписывается
+    # целиком, тогда как квадратная теряет углы. Какой из вариантов круглый,
+    # знает интерфейс (icons/variants.json) — он и присылает это значение вместе
+    # с основным. Пусто = кружок берёт ту же картинку, что и всё остальное.
+    "icon_variant_circle": "",
     # Ключа icon_asset_base здесь намеренно нет, хотя app_icon_url() его читает:
     # попав в suno_rpc.cfg, он застыл бы там навсегда и пережил бы обновление
     # приложения — при переезде иконок на другую ветку у всех, кто уже запускал
@@ -266,9 +272,11 @@ def app_icon_url(circle: bool = False) -> str:
 
     circle=True — версия для маленького кружка рядом с обложкой. Он обрезает
     картинку ровно по вписанной окружности, срезая углы квадратной плашки, а
-    вместе с ними и уголок, ради которого у каждой иконки два варианта. В
-    icons/discord/ лежит та же иконка, уменьшенная так, чтобы целиком попасть
-    в круг (build-icons.py, fit_for_circle).
+    вместе с ними и уголок, ради которого у каждой иконки есть варианты. Если у
+    выбранного образа есть круглая плашка, интерфейс присылает её в
+    icon_variant_circle, и кружок берёт именно её — она вписана в окружность и
+    ничего не теряет. Иначе берётся обычный вариант, уменьшенный так, чтобы
+    целиком попасть в круг (build-icons.py, fit_for_circle).
 
     Пустая строка означает «иконки нет» — вызывающий должен молча обойтись без
     неё, а не подставлять заглушку: неверная ссылка в large_image/small_image
@@ -281,6 +289,7 @@ def app_icon_url(circle: bool = False) -> str:
     if not base.endswith("/"):
         base += "/"
     if circle:
+        variant = (cfg["settings"].get("icon_variant_circle") or "").strip() or variant
         return f"{base}discord/{variant}-circle.png"
     return f"{base}source/{variant}.png"
 
@@ -632,7 +641,7 @@ class Api:
             asyncio.run_coroutine_threadsafe(_reconnect_discord_async(), async_loop)
         return {"ok": True}
 
-    def set_icon_variant(self, variant: str):
+    def set_icon_variant(self, variant: str, circle: str = ""):
         """Принимает выбранный в интерфейсе вариант иконки.
 
         Выбор живёт у Electron, но Discord картинку с диска не возьмёт, поэтому
@@ -643,16 +652,23 @@ class Api:
         """
         global last_update, idle_shown
         variant = (variant or "").strip()
-        # Имя подставляется в URL, поэтому пускаем только то, из чего состоят
+        circle  = (circle or "").strip()
+        # Имена подставляются в URL, поэтому пускаем только то, из чего состоят
         # слаги вариантов: путь наружу и любые кавычки исключены.
-        if not variant or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", variant):
+        ok = lambda v: bool(re.fullmatch(r"[A-Za-z0-9_-]{1,64}", v))
+        if not variant or not ok(variant):
             return {"ok": False, "error": "bad variant"}
-        if cfg["settings"].get("icon_variant") != variant:
+        if circle and not ok(circle):
+            return {"ok": False, "error": "bad circle variant"}
+        if (cfg["settings"].get("icon_variant") != variant
+                or cfg["settings"].get("icon_variant_circle") != circle):
             cfg["settings"]["icon_variant"] = variant
+            cfg["settings"]["icon_variant_circle"] = circle
             save_config()
             last_update = 0
             idle_shown  = False
-            log_event(f"🖼  Иконка приложения: {variant}")
+            suffix = f" (кружок — {circle})" if circle and circle != variant else ""
+            log_event(f"🖼  Иконка приложения: {variant}{suffix}")
         return {"ok": True}
 
     def disconnect_discord(self):
@@ -1469,7 +1485,8 @@ async def start_control_server():
 
     async def h_set_icon(request):
         body = await _body(request)
-        return aiohttp_web.json_response(api.set_icon_variant(body.get("variant") or ""))
+        return aiohttp_web.json_response(
+            api.set_icon_variant(body.get("variant") or "", body.get("circle") or ""))
 
     async def h_disconnect(request):
         return aiohttp_web.json_response(api.disconnect_discord())

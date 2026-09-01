@@ -23,6 +23,7 @@ build-icons.py — готовит наборы иконок приложения
   gray  — Discord не подключён
 """
 
+import json
 import os
 import sys
 
@@ -45,58 +46,46 @@ DISC_DIR = os.path.join(ROOT, "desktop", "src", "icons", "discord")
 # на картинку для Discord (app_icon_url в suno_rpc.py), а Discord скачивает её
 # сам. Кириллица в имени сюда не годится — ссылка тогда состоит из процентных
 # escape-последовательностей и ломается при любом переносе файла.
-# Порядок здесь = порядок в настройках; первый вариант считается основным.
-# У каждого образа два варианта: обычный (правый нижний угол вырезан дугой,
-# по ней уходит хвост персонажа) и "-solid" (угол залит до края). В настройках
-# они показываются одной плиткой с общим переключателем, а не двумя подряд.
-VARIANTS = [
-    ("play",       "play.png",           "Плеер"),
-    ("play-solid", "play-solid.png",          "Плеер (сплошной угол)"),
-    ("fox",        "fox.png",   "Бойкиссер"),
-    ("fox-solid",  "fox-solid.png", "Бойкиссер (сплошной угол)"),
-    ("stand", "stand.png", "Во весь рост"),
-    ("stand-solid", "stand-solid.png", "Во весь рост (сплошной угол)"),
-    ("glee", "glee.png", "Интересное радостное чувство"),
-    ("glee-solid", "glee-solid.png", "Интересное радостное чувство (сплошной угол)"),
-    ("cute-wow", "cute-wow.png", "Милое удивление"),
-    ("cute-wow-solid", "cute-wow-solid.png", "Милое удивление (сплошной угол)"),
-    ("huh", "huh.png", "Не понял"),
-    ("huh-solid", "huh-solid.png", "Не понял (сплошной угол)"),
-    ("sulk", "sulk.png", "Обида"),
-    ("sulk-solid", "sulk-solid.png", "Обида (сплошной угол)"),
-    ("sad", "sad.png", "Огорчение"),
-    ("sad-solid", "sad-solid.png", "Огорчение (сплошной угол)"),
-    ("sprawl", "sprawl.png", "Ожидание (развалился)"),
-    ("sprawl-solid", "sprawl-solid.png", "Ожидание (развалился) (сплошной угол)"),
-    ("wait", "wait.png", "Ожидание"),
-    ("wait-solid", "wait-solid.png", "Ожидание (сплошной угол)"),
-    ("chonk", "chonk.png", "Просто толстая кость"),
-    ("chonk-solid", "chonk-solid.png", "Просто толстая кость (сплошной угол)"),
-    ("shy", "shy.png", "Смущение"),
-    ("shy-solid", "shy-solid.png", "Смущение (сплошной угол)"),
-    ("shame", "shame.png", "Стыдно"),
-    ("shame-solid", "shame-solid.png", "Стыдно (сплошной угол)"),
-    ("starfish", "starfish.png", "Счастье (звёздочкой)"),
-    ("starfish-solid", "starfish-solid.png", "Счастье (звёздочкой) (сплошной угол)"),
-    ("joy", "joy.png", "Счастье"),
-    ("joy-solid", "joy-solid.png", "Счастье (сплошной угол)"),
-    ("wow", "wow.png", "Удивление"),
-    ("wow-solid", "wow-solid.png", "Удивление (сплошной угол)"),
-    ("aww", "aww.png", "Умиление"),
-    ("aww-solid", "aww-solid.png", "Умиление (сплошной угол)"),
-    ("aww-2", "aww-2.png", "Умиление 2"),
-    ("aww-2-solid", "aww-2-solid.png", "Умиление 2 (сплошной угол)"),
-    ("aww-3", "aww-3.png", "Умиление 3"),
-    ("aww-3-solid", "aww-3-solid.png", "Умиление 3 (сплошной угол)"),
-    ("aww-4", "aww-4.png", "Умиление 4"),
-    ("aww-4-solid", "aww-4-solid.png", "Умиление 4 (сплошной угол)"),
-    ("calm", "calm.png", "Умиротворение"),
-    ("calm-solid", "calm-solid.png", "Умиротворение (сплошной угол)"),
-    ("tired", "tired.png", "Усталость"),
-    ("tired-solid", "tired-solid.png", "Усталость (сплошной угол)"),
-    ("smirk", "smirk.png", "Прищур"),
-    ("smirk-solid", "smirk-solid.png", "Прищур (сплошной угол)"),
+#
+# Порядок здесь = порядок плиток в настройках; первый образ считается основным.
+BASES = [
+    ("play",     "Плеер"),
+    ("fox",      "Бойкиссер"),
+    ("stand",    "Во весь рост"),
+    ("glee",     "Интересное радостное чувство"),
+    ("cute-wow", "Милое удивление"),
+    ("huh",      "Не понял"),
+    ("sulk",     "Обида"),
+    ("sad",      "Огорчение"),
+    ("sprawl",   "Ожидание (развалился)"),
+    ("wait",     "Ожидание"),
+    ("chonk",    "Просто толстая кость"),
+    ("shy",      "Смущение"),
+    ("shame",    "Стыдно"),
+    ("starfish", "Счастье (звёздочкой)"),
+    ("joy",      "Счастье"),
+    ("wow",      "Удивление"),
+    ("aww",      "Умиление"),
+    ("aww-2",    "Умиление 2"),
+    ("aww-3",    "Умиление 3"),
+    ("aww-4",    "Умиление 4"),
+    ("calm",     "Умиротворение"),
+    ("tired",    "Усталость"),
+    ("smirk",    "Прищур"),
 ]
+
+# Формы плашки. Каждый образ существует во всех трёх, но собирается только та,
+# для которой в source/ реально лежит картинка: у старых образов (например
+# «Плеер») круглого варианта нет, и это не ошибка.
+SHAPES = [
+    ("",       "corner", "с уголком"),
+    ("-solid", "square", "сплошной угол"),
+    ("-round", "round",  "круг"),
+]
+
+# То, что собралось, записывается сюда — этот файл читает main.js, чтобы список
+# иконок в настройках не приходилось держать вторым экземпляром вручную.
+INDEX_FILE = os.path.join(ROOT, "desktop", "src", "icons", "variants.json")
 
 # Кружок рядом с обложкой Discord обрезает картинку РОВНО по вписанной
 # окружности, поэтому углы квадратной плашки срезаются первыми — вместе с тем
@@ -137,9 +126,15 @@ def with_status_dot(img: Image.Image, color) -> Image.Image:
     return im
 
 
-def fit_for_circle(img: Image.Image) -> Image.Image:
-    """Уменьшает иконку так, чтобы круглая обрезка Discord её не срезала."""
+def fit_for_circle(img: Image.Image, shape: str) -> Image.Image:
+    """Уменьшает иконку так, чтобы круглая обрезка Discord её не срезала.
+
+    Круглому варианту ужиматься не нужно: он сам вписан в окружность, и уменьши
+    мы его — вокруг иконки в Discord осталось бы пустое кольцо.
+    """
     im = img.convert("RGBA").resize((CIRCLE_SIZE, CIRCLE_SIZE), Image.LANCZOS)
+    if shape == "round":
+        return im
     side = int(CIRCLE_SIZE * CIRCLE_SCALE)
     inner = im.resize((side, side), Image.LANCZOS)
     out = Image.new("RGBA", (CIRCLE_SIZE, CIRCLE_SIZE), (0, 0, 0, 0))
@@ -163,24 +158,27 @@ def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     os.makedirs(DISC_DIR, exist_ok=True)
 
-    made = 0
-    for slug, filename, label in VARIANTS:
-        src = os.path.join(SRC_DIR, filename)
-        if not os.path.isfile(src):
-            print(f"[ПРОПУСК] нет файла {filename}")
-            continue
+    made, index = 0, []
+    for base, label in BASES:
+        for suffix, shape, shape_label in SHAPES:
+            slug = base + suffix
+            src = os.path.join(SRC_DIR, f"{slug}.png")
+            if not os.path.isfile(src):
+                continue
 
-        img = Image.open(src).convert("RGBA")
-        save_ico(img, os.path.join(OUT_DIR, f"{slug}.ico"), WINDOW_SIZES)
-        for state, color in DOT_COLORS.items():
-            save_ico(with_status_dot(img, color),
-                     os.path.join(OUT_DIR, f"{slug}-tray-{state}.ico"), TRAY_SIZES)
-        img.resize((PREVIEW_SIZE, PREVIEW_SIZE), Image.LANCZOS).save(
-            os.path.join(OUT_DIR, f"{slug}-preview.png"))
-        fit_for_circle(img).save(os.path.join(DISC_DIR, f"{slug}-circle.png"))
+            img = Image.open(src).convert("RGBA")
+            save_ico(img, os.path.join(OUT_DIR, f"{slug}.ico"), WINDOW_SIZES)
+            for state, color in DOT_COLORS.items():
+                save_ico(with_status_dot(img, color),
+                         os.path.join(OUT_DIR, f"{slug}-tray-{state}.ico"), TRAY_SIZES)
+            img.resize((PREVIEW_SIZE, PREVIEW_SIZE), Image.LANCZOS).save(
+                os.path.join(OUT_DIR, f"{slug}-preview.png"))
+            fit_for_circle(img, shape).save(os.path.join(DISC_DIR, f"{slug}-circle.png"))
 
-        print(f"  {slug:11} «{label}»  ← {filename}")
-        made += 1
+            index.append({"id": slug, "base": base, "shape": shape,
+                          "label": label, "shapeLabel": shape_label})
+            print(f"  {slug:16} «{label}» — {shape_label}")
+            made += 1
 
     if not made:
         print("[ОШИБКА] не собрано ни одного варианта")
@@ -189,11 +187,17 @@ def main():
     # app.ico — то, что electron-builder зашивает в .exe и установщик. Меняется
     # только пересборкой приложения: иконку самого exe в рантайме не подменить,
     # поэтому здесь всегда основной (первый) вариант.
-    main_slug = VARIANTS[0][0]
+    main_slug = index[0]["id"]
     with open(os.path.join(OUT_DIR, f"{main_slug}.ico"), "rb") as fr, \
          open(os.path.join(ROOT, "desktop", "src", "icons", "app.ico"), "wb") as fw:
         fw.write(fr.read())
     print(f"\napp.ico обновлён из варианта «{main_slug}» (иконка .exe и установщика)")
+
+    # Список для main.js: пусть приложение читает то, что реально собралось, а не
+    # второй экземпляр таблицы, который забудут дополнить при добавлении иконки.
+    with open(INDEX_FILE, "w", encoding="utf-8") as fw:
+        json.dump(index, fw, ensure_ascii=False, indent=2)
+    print(f"{os.path.basename(INDEX_FILE)}: {len(index)} вариантов для настроек")
     return 0
 
 

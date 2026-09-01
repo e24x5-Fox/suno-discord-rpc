@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+<title>Suno RPC — Редактор иконки</title>
+<style>
+  /* Палитра та же, что у index.html и guide.html: окно должно читаться как
+     часть приложения. Внешних ресурсов нет намеренно — страница открывается из
+     установленного приложения, у которого интернета может не быть. */
+  :root{
+    --bg:#0e0e10; --bg2:#18181b; --bg3:#27272a; --bg4:#1c1c1f;
+    --accent:#8b5cf6; --accent2:#a78bfa;
+    --text:#f4f4f5; --text2:#a1a1aa; --text3:#52525b;
+    --green:#22c55e; --yellow:#eab308; --red:#ef4444;
+    --tb:#8b5cf6; --tb-h:36px;
+    --sans:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+    --mono:"Cascadia Code","Consolas",monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%; margin:0;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:var(--sans); font-size:13px; line-height:1.5;
+    display:flex; flex-direction:column;
+    border:1px solid var(--tb); overflow:hidden;
+  }
+
+  .titlebar{flex:0 0 auto; height:var(--tb-h); background:var(--tb); display:flex; overflow:hidden;}
+  .tb-drag{
+    width:env(titlebar-area-width, 100%); height:100%;
+    display:flex; align-items:center; gap:9px; padding-left:13px;
+    white-space:nowrap; overflow:hidden; -webkit-app-region:drag;
+  }
+  .tb-mark{width:9px; height:9px; border-radius:3px; background:rgba(255,255,255,.85); flex:0 0 auto;}
+  .tb-title{color:#fff; font-size:11.5px; font-weight:700; letter-spacing:.09em; font-family:var(--mono);}
+
+  .body{flex:1; min-height:0; display:flex; gap:18px; padding:18px; overflow:hidden;}
+
+  /* ── Слева: холст и превью размеров ── */
+  .stage{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; align-items:center; gap:14px;}
+  .canvas-wrap{
+    position:relative; border-radius:14px; padding:10px; background:var(--bg2);
+    border:1px solid var(--bg3);
+  }
+  /* Шахматка под холстом: без неё прозрачные края иконки не отличить от фона. */
+  #canvas{
+    display:block; width:380px; height:380px; border-radius:8px; cursor:grab;
+    background-image:
+      linear-gradient(45deg,#232326 25%,transparent 25%),
+      linear-gradient(-45deg,#232326 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#232326 75%),
+      linear-gradient(-45deg,transparent 75%,#232326 75%);
+    background-size:18px 18px;
+    background-position:0 0,0 9px,9px -9px,-9px 0;
+  }
+  #canvas.dragging{cursor:grabbing;}
+  #canvas.over{outline:2px dashed var(--accent); outline-offset:4px;}
+
+  .sizes{display:flex; align-items:flex-end; gap:18px;}
+  .size{display:flex; flex-direction:column; align-items:center; gap:6px;}
+  .size canvas{
+    image-rendering:auto; border-radius:4px;
+    background:#232326;
+  }
+  .size span{font-size:10px; color:var(--text3); font-family:var(--mono);}
+
+  /* ── Справа: настройки ── */
+  .panel{
+    flex:0 0 330px; overflow-y:auto; min-height:0;
+    display:flex; flex-direction:column; gap:14px; padding-right:4px;
+  }
+  ::-webkit-scrollbar{width:9px;}
+  ::-webkit-scrollbar-track{background:var(--bg);}
+  ::-webkit-scrollbar-thumb{background:var(--bg3); border-radius:5px;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--accent);}
+
+  .card{background:var(--bg2); border:1px solid var(--bg3); border-radius:12px; padding:13px 14px;}
+  .card-title{
+    font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--accent2); font-weight:700; margin-bottom:10px;
+  }
+  .hint{color:var(--text2); font-size:11px; line-height:1.45; margin:8px 0 0;}
+  .hint b{color:var(--text);}
+
+  .row{display:flex; gap:6px; flex-wrap:wrap;}
+  .btn{
+    background:var(--bg3); color:var(--text2); border:1px solid transparent;
+    border-radius:8px; padding:7px 12px; font-size:11.5px; cursor:pointer;
+    font-family:inherit;
+  }
+  .btn:hover{background:var(--bg4); color:var(--text);}
+  .btn.active{background:var(--bg4); color:var(--text); border-color:var(--accent);}
+  .btn.primary{background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600;}
+  .btn.primary:hover{background:var(--accent2); color:#1a1a1e;}
+  .btn:disabled{opacity:.45; cursor:default;}
+
+  .field{margin-top:10px;}
+  .field:first-child{margin-top:0;}
+  .field label{display:flex; justify-content:space-between; font-size:11px; color:var(--text2); margin-bottom:5px;}
+  .field label b{color:var(--text); font-family:var(--mono); font-weight:600;}
+  input[type=range]{width:100%; accent-color:var(--accent);}
+  input[type=text]{
+    width:100%; background:var(--bg3); color:var(--text); border:1px solid var(--bg3);
+    border-radius:8px; padding:7px 9px; font-family:inherit; font-size:12px;
+  }
+  input[type=text]:focus{outline:none; border-color:var(--accent);}
+
+  .drop{
+    border:1px dashed var(--bg3); border-radius:10px; padding:14px;
+    text-align:center; color:var(--text2); font-size:11.5px; cursor:pointer;
+  }
+  .drop:hover{border-color:var(--accent); color:var(--text);}
+  .file-name{
+    margin-top:8px; font-size:10.5px; color:var(--accent2);
+    font-family:var(--mono); word-break:break-all;
+  }
+  .note{
+    background:rgba(234,179,8,.08); border:1px solid rgba(234,179,8,.25);
+    border-radius:10px; padding:10px 12px; color:var(--text2); font-size:11px; line-height:1.5;
+  }
+  .note b{color:var(--yellow);}
+  .status{font-size:11px; color:var(--text2); min-height:16px;}
+  .status.ok{color:var(--green);}
+  .status.err{color:var(--red);}
+</style>
+</head>
+<body>
+
+<div class="titlebar"><div class="tb-drag">
+  <div class="tb-mark"></div><div class="tb-title">РЕДАКТОР ИКОНКИ</div>
+</div></div>
+
+<div class="body">
+  <div class="stage">
+    <div class="canvas-wrap">
+      <canvas id="canvas" width="512" height="512"></canvas>
+    </div>
+    <div class="sizes">
+      <div class="size"><canvas id="p64" width="64" height="64"></canvas><span>64</span></div>
+      <div class="size"><canvas id="p32" width="32" height="32"></canvas><span>32</span></div>
+      <div class="size"><canvas id="p16" width="16" height="16"></canvas><span>16</span></div>
+      <div class="size"><canvas id="ptray" width="32" height="32"></canvas><span>трей</span></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="card">
+      <div class="card-title">Форма</div>
+      <div class="row" id="shapes"></div>
+      <p class="hint">Плашка и маска обрезки взяты из того же файла Krita, что и
+        готовые иконки, — твой персонаж встанет на ту же подложку. Обводка по
+        силуэту рисуется автоматически, тем же цветом и той же толщины, что у
+        готовых иконок: она часть образа, а не настройка.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Картинка</div>
+      <div class="drop" id="drop">
+        Перетащи сюда PNG с прозрачным фоном<br>или нажми, чтобы выбрать файл
+      </div>
+      <div class="file-name" id="file-name"></div>
+      <input type="file" id="file" accept="image/png,image/webp,image/jpeg" hidden>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Положение</div>
+      <div class="field">
+        <label>Масштаб <b id="v-scale">100%</b></label>
+        <input type="range" id="scale" min="10" max="250" value="100">
+      </div>
+      <div class="field">
+        <label>Поворот <b id="v-angle">0°</b></label>
+        <input type="range" id="angle" min="-180" max="180" value="0">
+      </div>
+      <p class="hint">Двигать персонажа можно прямо мышью по холсту.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Сохранение</div>
+      <div class="field">
+        <label>Название в списке иконок</label>
+        <input type="text" id="label" placeholder="Мой персонаж" maxlength="40">
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <button class="btn primary" id="save" disabled>Сохранить и применить</button>
+        <button class="btn" id="reset">Сбросить</button>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="note">
+      <b>В Discord эта иконка не попадёт.</b> Discord скачивает картинку по
+      ссылке из репозитория проекта и до файлов на твоём диске не дотягивается —
+      в активности останется та иконка, что стояла раньше. В окне, на панели
+      задач и в трее своя иконка работает полностью.
+    </div>
+  </div>
+</div>
+
+<script>
+const api = window.sunoApi;
+
+// Форма → файлы плашки и маски. Имена совпадают с тем, что кладёт
+// import-icons.py в icons/templates/ (см. TEMPLATES в нём).
+const SHAPES = [
+  { id: 'corner', label: 'С уголком', file: 'corner' },
+  { id: 'square', label: 'Квадрат',   file: 'solid'  },
+  { id: 'round',  label: 'Круг',      file: 'round'  },
+];
+const SIZE = 512;
+
+// Обводка у всех иконок одна и та же и настройке не подлежит: это часть образа,
+// а не вкус пользователя. Цвет — тот же акцент, которым нарисованы и светлая
+// рамка плашки, и обводка вокруг готовых персонажей в файле Krita (проверено:
+// в обоих местах ровно #8b5cf6). Толщина — в пикселях холста 512.
+const OUTLINE_WIDTH = 10;
+const OUTLINE_COLOR = '#8b5cf6';
+
+// Точка состояния в трее рисуется теми же пропорциями и цветами, что у готовых
+// иконок (build-icons.py, with_status_dot): иначе своя иконка выделялась бы в
+// трее не тем размером кружка.
+const DOT = { green: '#22c55e', amber: '#eab308', gray: '#6e6e7a' };
+
+const state = {
+  shape: 'corner',
+  image: null,          // Image с картинкой пользователя
+  scale: 1,
+  angle: 0,
+  dx: 0, dy: 0,         // смещение центра в пикселях холста 512
+};
+
+const plates = {};      // форма → Image плашки
+const masks = {};       // форма → Image маски (маска лежит в альфе)
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('не загрузилась картинка ' + src));
+    img.src = src;
+  });
+}
+
+function scratch() {
+  const c = document.createElement('canvas');
+  c.width = c.height = SIZE;
+  return c;
+}
+
+// Персонаж на отдельном холсте: масштаб, поворот и смещение уже применены.
+// Дальше с ним работают как с плоской картинкой — так обводка и обрезка не
+// зависят от того, как он повёрнут.
+function drawCharacter() {
+  const c = scratch();
+  if (!state.image) return c;
+  const g = c.getContext('2d');
+  const img = state.image;
+  // Вписываем в холст по большей стороне, дальше масштаб крутит пользователь.
+  const fit = SIZE / Math.max(img.width, img.height);
+  const w = img.width * fit * state.scale;
+  const h = img.height * fit * state.scale;
+  g.translate(SIZE / 2 + state.dx, SIZE / 2 + state.dy);
+  g.rotate(state.angle * Math.PI / 180);
+  g.drawImage(img, -w / 2, -h / 2, w, h);
+  return c;
+}
+
+// Обводка = раздутый силуэт. Копируем персонажа много раз по кругу со
+// смещением, потом заливаем то, что получилось, цветом через source-in —
+// остаётся ровный контур по прозрачности исходной картинки.
+function drawOutline(char) {
+  const c = scratch();
+  const g = c.getContext('2d');
+  const r = OUTLINE_WIDTH;
+  // Два кольца: на большой толщине одного мало, между копиями появляются
+  // зазубрины по диагоналям.
+  for (const radius of [r, r * 0.55]) {
+    const steps = Math.max(16, Math.round(radius * 2));
+    for (let i = 0; i < steps; i++) {
+      const a = (i / steps) * Math.PI * 2;
+      g.drawImage(char, Math.cos(a) * radius, Math.sin(a) * radius);
+    }
+  }
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = OUTLINE_COLOR;
+  g.fillRect(0, 0, SIZE, SIZE);
+  return c;
+}
+
+// Готовая иконка: плашка, поверх — персонаж с обводкой, обрезанный маской.
+// Маску применяем только к персонажу: плашке она не нужна, она и так своей
+// формы, а вот всё, что вылезло за рамку, срезать обязательно.
+function compose() {
+  const out = scratch();
+  const g = out.getContext('2d');
+  const plate = plates[state.shape];
+  if (plate) g.drawImage(plate, 0, 0, SIZE, SIZE);
+
+  if (state.image) {
+    const char = drawCharacter();
+    const layer = scratch();
+    const lg = layer.getContext('2d');
+    lg.drawImage(drawOutline(char), 0, 0);
+    lg.drawImage(char, 0, 0);
+
+    const mask = masks[state.shape];
+    if (mask) {
+      lg.globalCompositeOperation = 'destination-in';
+      lg.drawImage(mask, 0, 0, SIZE, SIZE);
+    }
+    g.drawImage(layer, 0, 0);
+  }
+  return out;
+}
+
+// Иконка трея — та же картинка плюс точка состояния в правом нижнем углу.
+function withDot(src, color) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.drawImage(src, 0, 0, 64, 64);
+  const w = 64;
+  const r = w * 0.30 / 2;          // диаметр точки — 30% ширины
+  const pad = w * 0.04;
+  const cx = w - pad - r;
+  const cy = w - pad - r;
+  const ring = Math.max(1.5, w * 0.035);
+  g.beginPath(); g.arc(cx, cy, r + ring, 0, Math.PI * 2);
+  g.fillStyle = 'rgba(18,18,22,.92)'; g.fill();
+  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2);
+  g.fillStyle = color; g.fill();
+  return c;
+}
+
+function render() {
+  const out = compose();
+  ctx.clearRect(0, 0, SIZE, SIZE);
+  ctx.drawImage(out, 0, 0);
+
+  for (const [id, size] of [['p64', 64], ['p32', 32], ['p16', 16]]) {
+    const el = document.getElementById(id);
+    const g = el.getContext('2d');
+    g.clearRect(0, 0, size, size);
+    g.drawImage(out, 0, 0, size, size);
+  }
+  const tray = document.getElementById('ptray').getContext('2d');
+  tray.clearRect(0, 0, 32, 32);
+  tray.drawImage(withDot(out, DOT.green), 0, 0, 32, 32);
+
+  document.getElementById('save').disabled = !state.image;
+}
+
+// ── Управление ────────────────────────────────────────
+const shapesRow = document.getElementById('shapes');
+function renderShapes() {
+  shapesRow.innerHTML = '';
+  for (const s of SHAPES) {
+    const b = document.createElement('button');
+    b.className = 'btn' + (s.id === state.shape ? ' active' : '');
+    b.textContent = s.label;
+    b.addEventListener('click', () => { state.shape = s.id; renderShapes(); render(); });
+    shapesRow.appendChild(b);
+  }
+}
+
+function bindSlider(id, key, format, transform) {
+  const el = document.getElementById(id);
+  const out = document.getElementById('v-' + id);
+  const apply = () => {
+    const raw = Number(el.value);
+    state[key] = transform ? transform(raw) : raw;
+    if (out) out.textContent = format(raw);
+    render();
+  };
+  el.addEventListener('input', apply);
+  apply();
+}
+
+bindSlider('scale', 'scale', (v) => v + '%', (v) => v / 100);
+bindSlider('angle', 'angle', (v) => v + '°');
+
+// Перетаскивание персонажа мышью. Холст показан меньше своего размера, поэтому
+// смещение мыши пересчитываем в пиксели холста, иначе персонаж уезжал бы
+// медленнее курсора.
+let drag = null;
+canvas.addEventListener('pointerdown', (e) => {
+  if (!state.image) return;
+  drag = { x: e.clientX, y: e.clientY, dx: state.dx, dy: state.dy };
+  canvas.setPointerCapture(e.pointerId);
+  canvas.classList.add('dragging');
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const k = SIZE / canvas.getBoundingClientRect().width;
+  state.dx = drag.dx + (e.clientX - drag.x) * k;
+  state.dy = drag.dy + (e.clientY - drag.y) * k;
+  render();
+});
+const endDrag = () => { drag = null; canvas.classList.remove('dragging'); };
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+// ── Загрузка картинки ─────────────────────────────────
+const fileInput = document.getElementById('file');
+const dropZone = document.getElementById('drop');
+
+async function useFile(file) {
+  if (!file) return;
+  const url = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+  state.image = await loadImage(url);
+  state.dx = state.dy = 0;
+  document.getElementById('file-name').textContent = file.name;
+  const labelBox = document.getElementById('label');
+  if (!labelBox.value) labelBox.value = file.name.replace(/\.[^.]+$/, '').slice(0, 40);
+  render();
+}
+
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => useFile(e.target.files[0]));
+
+for (const el of [dropZone, canvas]) {
+  el.addEventListener('dragover', (e) => { e.preventDefault(); canvas.classList.add('over'); });
+  el.addEventListener('dragleave', () => canvas.classList.remove('over'));
+  el.addEventListener('drop', (e) => {
+    e.preventDefault();
+    canvas.classList.remove('over');
+    useFile(e.dataTransfer.files[0]);
+  });
+}
+
+// ── Сохранение ────────────────────────────────────────
+const status = document.getElementById('status');
+function say(text, cls) {
+  status.textContent = text;
+  status.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+document.getElementById('save').addEventListener('click', async () => {
+  if (!state.image) return;
+  const out = compose();
+  say('Сохраняю...');
+  const res = await api.save_custom_icon({
+    label: document.getElementById('label').value,
+    shape: state.shape,
+    png: out.toDataURL('image/png'),
+    tray: {
+      green: withDot(out, DOT.green).toDataURL('image/png'),
+      amber: withDot(out, DOT.amber).toDataURL('image/png'),
+      gray:  withDot(out, DOT.gray).toDataURL('image/png'),
+    },
+  });
+  if (res && res.ok) say('Готово — иконка применена к окну и трею.', 'ok');
+  else say('Не сохранилось: ' + ((res && res.error) || 'неизвестная ошибка'), 'err');
+});
+
+document.getElementById('reset').addEventListener('click', () => {
+  state.image = null;
+  state.dx = state.dy = 0;
+  document.getElementById('file-name').textContent = '';
+  document.getElementById('label').value = '';
+  fileInput.value = '';
+  say('');
+  render();
+});
+
+// ── Старт ─────────────────────────────────────────────
+(async () => {
+  renderShapes();
+  for (const s of SHAPES) {
+    try {
+      plates[s.id] = await loadImage(`icons/templates/plate-${s.file}.png`);
+      masks[s.id]  = await loadImage(`icons/templates/mask-${s.file}.png`);
+    } catch (e) {
+      console.error(e.message);
+    }
+  }
+  render();
+})();
+</script>
+</body>
+</html>

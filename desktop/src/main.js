@@ -33,57 +33,78 @@ app.commandLine.appendSwitch('no-proxy-server');
 //  ИКОНКИ
 // ══════════════════════════════════════════════
 
-// Наборы иконок готовит build-icons.py из desktop/src/icons/source/.
-// Порядок здесь = порядок в настройках, первый вариант основной.
-const ICON_VARIANTS = [
-  { id: 'play',       label: 'Плеер' },
-  { id: 'play-solid', label: 'Плеер (сплошной угол)' },
-  { id: 'fox',        label: 'Бойкиссер' },
-  { id: 'fox-solid',  label: 'Бойкиссер (сплошной угол)' },
-  { id: 'stand', label: 'Во весь рост' },
-  { id: 'stand-solid', label: 'Во весь рост (сплошной угол)' },
-  { id: 'glee', label: 'Интересное радостное чувство' },
-  { id: 'glee-solid', label: 'Интересное радостное чувство (сплошной угол)' },
-  { id: 'cute-wow', label: 'Милое удивление' },
-  { id: 'cute-wow-solid', label: 'Милое удивление (сплошной угол)' },
-  { id: 'huh', label: 'Не понял' },
-  { id: 'huh-solid', label: 'Не понял (сплошной угол)' },
-  { id: 'sulk', label: 'Обида' },
-  { id: 'sulk-solid', label: 'Обида (сплошной угол)' },
-  { id: 'sad', label: 'Огорчение' },
-  { id: 'sad-solid', label: 'Огорчение (сплошной угол)' },
-  { id: 'sprawl', label: 'Ожидание (развалился)' },
-  { id: 'sprawl-solid', label: 'Ожидание (развалился) (сплошной угол)' },
-  { id: 'wait', label: 'Ожидание' },
-  { id: 'wait-solid', label: 'Ожидание (сплошной угол)' },
-  { id: 'chonk', label: 'Просто толстая кость' },
-  { id: 'chonk-solid', label: 'Просто толстая кость (сплошной угол)' },
-  { id: 'shy', label: 'Смущение' },
-  { id: 'shy-solid', label: 'Смущение (сплошной угол)' },
-  { id: 'shame', label: 'Стыдно' },
-  { id: 'shame-solid', label: 'Стыдно (сплошной угол)' },
-  { id: 'starfish', label: 'Счастье (звёздочкой)' },
-  { id: 'starfish-solid', label: 'Счастье (звёздочкой) (сплошной угол)' },
-  { id: 'joy', label: 'Счастье' },
-  { id: 'joy-solid', label: 'Счастье (сплошной угол)' },
-  { id: 'wow', label: 'Удивление' },
-  { id: 'wow-solid', label: 'Удивление (сплошной угол)' },
-  { id: 'aww', label: 'Умиление' },
-  { id: 'aww-solid', label: 'Умиление (сплошной угол)' },
-  { id: 'aww-2', label: 'Умиление 2' },
-  { id: 'aww-2-solid', label: 'Умиление 2 (сплошной угол)' },
-  { id: 'aww-3', label: 'Умиление 3' },
-  { id: 'aww-3-solid', label: 'Умиление 3 (сплошной угол)' },
-  { id: 'aww-4', label: 'Умиление 4' },
-  { id: 'aww-4-solid', label: 'Умиление 4 (сплошной угол)' },
-  { id: 'calm', label: 'Умиротворение' },
-  { id: 'calm-solid', label: 'Умиротворение (сплошной угол)' },
-  { id: 'tired', label: 'Усталость' },
-  { id: 'tired-solid', label: 'Усталость (сплошной угол)' },
-  { id: 'smirk', label: 'Прищур' },
-  { id: 'smirk-solid', label: 'Прищур (сплошной угол)' },
-];
+// Наборы иконок готовит build-icons.py из desktop/src/icons/source/, он же
+// пишет icons/variants.json — какие образы и в каких формах реально собрались.
+// Держать этот список здесь вторым экземпляром смысла нет: его забывают
+// дополнять, когда в проекте появляется новый персонаж.
+//
+// Одна запись = один файл иконки: id (он же имя .ico), base (образ), shape
+// (corner / square / round) и label (подпись образа без упоминания формы).
+// Если файла нет — например, у «Плеера» нет круглого варианта, — записи о нём
+// в списке тоже не будет.
+function loadIconVariants() {
+  try {
+    const raw = fs.readFileSync(path.join(__dirname, 'icons', 'variants.json'), 'utf8');
+    const list = JSON.parse(raw).filter((v) => v && typeof v.id === 'string');
+    if (list.length) return list;
+    console.error('[иконки] variants.json пуст');
+  } catch (e) {
+    console.error('[иконки] не прочитался variants.json:', e.message);
+  }
+  // Запасной вариант: без списка окно и трей остались бы вообще без иконки.
+  return [{ id: 'play', base: 'play', shape: 'corner', label: 'Плеер' }];
+}
+
+const ICON_VARIANTS = loadIconVariants();
 const DEFAULT_VARIANT = ICON_VARIANTS[0].id;
+
+// ── Свои иконки ────────────────────────────────────────────────────────────
+//
+// Собранные в редакторе иконки лежат в userData, а не рядом с программой: папка
+// установки принадлежит системе, и писать туда без прав администратора нельзя.
+// Формат намеренно PNG, а не .ico: nativeImage прекрасно делает и окно, и трей
+// из PNG, а собрать .ico в рантайме нечем — этим занимается build-icons.py на
+// машине разработчика.
+const CUSTOM_DIR = () => path.join(app.getPath('userData'), 'custom-icons');
+const CUSTOM_INDEX = () => path.join(CUSTOM_DIR(), 'index.json');
+
+let customIcons = [];
+
+function loadCustomIcons() {
+  try {
+    const list = JSON.parse(fs.readFileSync(CUSTOM_INDEX(), 'utf8'));
+    // Запись без файла картинки — мусор от неудачного сохранения; такую плитку
+    // рисовать нечем, и выбор её сломал бы и окно, и трей.
+    return list.filter((v) => v && v.id && fs.existsSync(customFile(v.id)));
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveCustomIndex() {
+  fs.mkdirSync(CUSTOM_DIR(), { recursive: true });
+  fs.writeFileSync(CUSTOM_INDEX(), JSON.stringify(customIcons, null, 2), 'utf8');
+}
+
+const customFile = (id, state) =>
+  path.join(CUSTOM_DIR(), state ? `${id}-tray-${state}.png` : `${id}.png`);
+
+const isCustom = (id) => customIcons.some((v) => v.id === id);
+
+// Список для интерфейса: сначала готовые образы, потом свои — новые внизу, где
+// их и ждёшь.
+//
+// Превью своей иконки лежит в userData, вне папки страницы. Отдавать file://
+// нельзя: у index.html стоит CSP с `img-src 'self' data:`, и чужой файловый
+// адрес она не пропустит. Поэтому картинка уезжает в интерфейс как data:-строка
+// — своих иконок единицы, и на их размере это незаметно.
+const allVariants = () => ICON_VARIANTS.concat(customIcons.map((v) => {
+  let preview = null;
+  try {
+    preview = 'data:image/png;base64,' + fs.readFileSync(customFile(v.id)).toString('base64');
+  } catch (e) { /* файл пропал — плитка отрисуется без картинки */ }
+  return { ...v, preview };
+}));
 
 // Выбор иконки хранится у самого Electron, а не в конфиге бэкенда: трей нужно
 // нарисовать сразу при запуске, до того как бэкенд поднимется и ответит, иначе
@@ -124,7 +145,7 @@ function loadUiSettings() {
   // Мержим с дефолтами, а не возвращаем прочитанное целиком: файл мог быть
   // записан старой версией, где половины ключей ещё не существовало.
   const s = { ...DEFAULT_UI_SETTINGS, ...saved };
-  if (!ICON_VARIANTS.some((v) => v.id === s.iconVariant)) s.iconVariant = DEFAULT_VARIANT;
+  if (!allVariants().some((v) => v.id === s.iconVariant)) s.iconVariant = DEFAULT_VARIANT;
   for (const key of WINDOW_SETTING_KEYS) s[key] = !!s[key];
   if (!validBounds(s.bounds)) s.bounds = null;
   return s;
@@ -141,11 +162,18 @@ function saveUiSettings(s) {
 let uiSettings = { ...DEFAULT_UI_SETTINGS };
 
 const iconPath = (file) => path.join(__dirname, 'icons', 'variants', file);
-const windowIconPath = () => iconPath(`${uiSettings.iconVariant}.ico`);
+
+// Свои иконки лежат в userData отдельными PNG, готовые — рядом с программой
+// набором .ico. Дальше по коду разницы быть не должно, поэтому оба пути
+// выдаются одной парой функций.
+const windowIconPath = () => (isCustom(uiSettings.iconVariant)
+  ? customFile(uiSettings.iconVariant)
+  : iconPath(`${uiSettings.iconVariant}.ico`));
 
 let mainWindow = null;
 let statsWindow = null;
 let guideWindow = null;
+let iconEditorWindow = null;
 let tray = null;
 let backend = null;          // ChildProcess Python-бэкенда
 let quitting = false;        // отличает «закрыть в трей» от настоящего выхода
@@ -285,8 +313,9 @@ function trayIcon(playing, discord) {
   const state = !discord ? 'gray' : (playing ? 'green' : 'amber');
   const key = `${uiSettings.iconVariant}-${state}`;
   if (!trayIcons[key]) {
-    trayIcons[key] = nativeImage.createFromPath(
-      iconPath(`${uiSettings.iconVariant}-tray-${state}.ico`));
+    trayIcons[key] = nativeImage.createFromPath(isCustom(uiSettings.iconVariant)
+      ? customFile(uiSettings.iconVariant, state)
+      : iconPath(`${uiSettings.iconVariant}-tray-${state}.ico`));
   }
   return trayIcons[key];
 }
@@ -314,8 +343,20 @@ function refreshTray() {
   tray.setToolTip(`Suno RPC — ${title}`.slice(0, 127));
 }
 
+// Маленький кружок поверх обложки в Discord обрезает картинку по окружности.
+// Круглая плашка вписывается в него целиком, поэтому для кружка всегда берём
+// круглый вариант того же образа — независимо от того, какую форму пользователь
+// выбрал для окна и трея. Если круглого варианта у образа нет (старые иконки
+// вроде «Плеера»), возвращаем сам вариант: бэкенд тогда уменьшит его как раньше.
+function circleVariant(id) {
+  const chosen = ICON_VARIANTS.find((v) => v.id === id);
+  if (!chosen) return id;
+  const round = ICON_VARIANTS.find((v) => v.base === chosen.base && v.shape === 'round');
+  return round ? round.id : id;
+}
+
 function applyIconVariant(id) {
-  if (!ICON_VARIANTS.some((v) => v.id === id)) return false;
+  if (!allVariants().some((v) => v.id === id)) return false;
   uiSettings.iconVariant = id;
   saveUiSettings(uiSettings);
 
@@ -323,7 +364,13 @@ function applyIconVariant(id) {
   // сам и до файлов приложения не достаёт, поэтому в presence уходит адрес
   // иконки в репозитории проекта. Ошибку глушим — выбор иконки не должен
   // отваливаться из-за того, что бэкенд ещё не поднялся.
-  post('set_icon_variant', { variant: id }).catch(() => {});
+  // Свою иконку Discord показать не может: он скачивает картинку по ссылке из
+  // репозитория проекта и до файлов на диске пользователя не дотягивается.
+  // Поэтому бэкенду о ней не сообщаем — в активности останется та иконка,
+  // которая стояла до этого, а не пустой серый квадрат от битой ссылки.
+  if (!isCustom(id)) {
+    post('set_icon_variant', { variant: id, circle: circleVariant(id) }).catch(() => {});
+  }
 
   refreshTray();
   // Иконку окна меняем на лету — она же показывается на панели задач и в
@@ -676,6 +723,105 @@ function openBrowserPage(id) {
 // ссылка наружу: её открывают ровно в тот момент, когда что-то не получилось, и
 // интернета у пользователя может не быть. Поэтому в самой странице нет ни
 // внешних шрифтов, ни картинок по ссылке.
+// ══════════════════════════════════════════════
+//  РЕДАКТОР ИКОНКИ
+// ══════════════════════════════════════════════
+
+function openIconEditor() {
+  if (iconEditorWindow && !iconEditorWindow.isDestroyed()) {
+    iconEditorWindow.show();
+    iconEditorWindow.focus();
+    return;
+  }
+  iconEditorWindow = new BrowserWindow({
+    title: 'Suno RPC — Редактор иконки',
+    width: 980,
+    height: 760,
+    minWidth: 720,
+    minHeight: 560,
+    backgroundColor: '#0e0e10',
+    icon: windowIconPath(),
+    autoHideMenuBar: true,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: TITLEBAR_COLOR,
+      symbolColor: TITLEBAR_SYMBOL_COLOR,
+      height: TITLEBAR_HEIGHT,
+    },
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+  iconEditorWindow.loadFile(path.join(__dirname, 'icon-editor.html'));
+  iconEditorWindow.on('closed', () => { iconEditorWindow = null; });
+}
+
+// Картинка приходит из редактора уже готовой — data:image/png;base64. Рисовать
+// её здесь нечем и незачем: canvas есть только в рендерере, а главный процесс
+// умеет ровно то, что нужно дальше, — положить файл и применить иконку.
+function dataUrlToBuffer(dataUrl) {
+  const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
+  return m ? Buffer.from(m[1], 'base64') : null;
+}
+
+function saveCustomIcon({ id, label, shape, png, tray: trayPngs }) {
+  const image = dataUrlToBuffer(png);
+  if (!image) return { ok: false, error: 'битая картинка' };
+
+  // id задаёт имена файлов, поэтому в нём допустимы только безопасные символы:
+  // иначе сюда можно было бы передать путь наружу из папки.
+  const safe = /^[A-Za-z0-9_-]{1,64}$/.test(String(id || '')) ? id : null;
+  const iconId = safe || `custom-${Date.now().toString(36)}`;
+
+  try {
+    fs.mkdirSync(CUSTOM_DIR(), { recursive: true });
+    fs.writeFileSync(customFile(iconId), image);
+    for (const state of ['green', 'amber', 'gray']) {
+      const buf = dataUrlToBuffer((trayPngs || {})[state]);
+      // Иконки трея не критичны: без них трей возьмёт основную картинку без
+      // точки состояния — хуже, но работать не перестанет.
+      if (buf) fs.writeFileSync(customFile(iconId, state), buf);
+    }
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+
+  const entry = {
+    id: iconId,
+    base: iconId,          // своя иконка — сама себе образ, форм у неё одна
+    shape: ['corner', 'square', 'round'].includes(shape) ? shape : 'corner',
+    label: (String(label || '').trim() || 'Своя иконка').slice(0, 40),
+    custom: true,
+  };
+  const at = customIcons.findIndex((v) => v.id === iconId);
+  if (at >= 0) customIcons[at] = entry; else customIcons.push(entry);
+  saveCustomIndex();
+
+  // Кэш трея держит nativeImage по ключу «вариант-состояние»: при перезаписи
+  // той же иконки без сброса в трее осталась бы прежняя картинка.
+  for (const key of Object.keys(trayIcons)) {
+    if (key.startsWith(`${iconId}-`)) delete trayIcons[key];
+  }
+  applyIconVariant(iconId);
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('icons-changed');
+  return { ok: true, id: iconId };
+}
+
+function deleteCustomIcon(id) {
+  if (!isCustom(id)) return { ok: false, error: 'нет такой иконки' };
+  customIcons = customIcons.filter((v) => v.id !== id);
+  saveCustomIndex();
+  for (const file of [customFile(id), ...['green', 'amber', 'gray'].map((s) => customFile(id, s))]) {
+    try { fs.unlinkSync(file); } catch (e) { /* файла может уже не быть */ }
+  }
+  // Удалили ту, что стоит сейчас, — иначе окно и трей остались бы без картинки.
+  if (uiSettings.iconVariant === id) applyIconVariant(DEFAULT_VARIANT);
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('icons-changed');
+  return { ok: true };
+}
+
 function openGuideWindow() {
   if (guideWindow && !guideWindow.isDestroyed()) {
     guideWindow.show();
@@ -789,9 +935,12 @@ ipcMain.handle('open_extensions_folder', (_e, dir) => {
 ipcMain.handle('open_browser_extensions', (_e, id) => openBrowserPage(id));
 ipcMain.handle('open_guide', () => openGuideWindow());
 
+ipcMain.handle('open_icon_editor', () => openIconEditor());
+ipcMain.handle('save_custom_icon', (_e, payload) => saveCustomIcon(payload || {}));
+ipcMain.handle('delete_custom_icon', (_e, id) => deleteCustomIcon(id));
 ipcMain.handle('get_icon_settings', () => ({
   current: uiSettings.iconVariant,
-  variants: ICON_VARIANTS,
+  variants: allVariants(),
 }));
 ipcMain.handle('set_icon_variant', (_e, id) => applyIconVariant(id));
 
@@ -813,7 +962,10 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     // Читаем до создания окна и трея: иначе они успеют показаться со старой
-    // иконкой и сменить её на глазах у пользователя.
+    // иконкой и сменить её на глазах у пользователя. Свои иконки — первыми:
+    // без них выбранная пользователем своя иконка не прошла бы проверку в
+    // loadUiSettings и молча откатилась бы на вариант по умолчанию.
+    customIcons = loadCustomIcons();
     uiSettings = loadUiSettings();
     createMainWindow();
 
@@ -853,7 +1005,8 @@ if (!app.requestSingleInstanceLock()) {
     }
     // Тем же путём, но при старте: бэкенд мог перезапуститься сам и не знать,
     // какую иконку выбрал пользователь.
-    post('set_icon_variant', { variant: uiSettings.iconVariant }).catch(() => {});
+    post('set_icon_variant', { variant: uiSettings.iconVariant,
+                               circle: circleVariant(uiSettings.iconVariant) }).catch(() => {});
     startStatePolling();
   });
 
